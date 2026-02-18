@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🦋 Chase the Butterfly!</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;800&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg:#0a0e2e; --purple:#a855f7; --pink:#ec4899;
+    --yellow:#FFD93D; --mint:#43E97B; --blue:#38bdf8; --orange:#FF9A3C;
+  }
+  body { font-family:'Baloo 2',cursive; background:var(--bg); overflow:hidden; height:100vh; width:100vw; user-select:none; }
+
+  /* ─────────────────────────────────────────
+     GAME SCREEN
+  ───────────────────────────────────────── */
+  #game { display:block; position:fixed; inset:0; width:100vw; height:100vh; }
+  #video {
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; transform:scaleX(-1); opacity:0; transition:opacity 1s;
+  }
+  #video.visible { opacity:1; }
+  #canvas { position:absolute; inset:0; width:100%; height:100%; }
+
+  /* HUD */
+  #hud {
+    position:absolute; top:0; left:0; right:0;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 20px;
+    background:linear-gradient(180deg,rgba(10,14,46,.88) 0%,transparent 100%);
+    z-index:10; pointer-events:none;
+  }
+  .hud-score { display:flex; align-items:center; gap:8px; }
+  .hud-score span { font-size:clamp(13px,2vw,18px); color:rgba(255,255,255,.7); font-weight:700; font-family:'Nunito',sans-serif; text-transform:uppercase; letter-spacing:1px; }
+  .score-val { font-size:clamp(26px,5vw,44px)!important; font-weight:800!important; color:var(--yellow)!important; text-shadow:0 0 18px rgba(255,217,61,.8); letter-spacing:-1px!important; font-family:'Baloo 2',cursive!important; }
+  .hud-timer { display:flex; align-items:center; gap:7px; }
+  .timer-val { font-size:clamp(26px,5vw,44px); font-weight:800; color:white; font-family:'Baloo 2',cursive; min-width:72px; text-align:center; }
+  .timer-val.urgent { color:#ff4d4d; animation:urgentPulse .5s ease-in-out infinite; }
+  @keyframes urgentPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.15);} }
+  .timer-label { font-size:clamp(11px,1.8vw,15px); color:rgba(255,255,255,.6); font-family:'Nunito',sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:1px; }
+  .level-badge { background:linear-gradient(135deg,var(--purple),var(--pink)); color:white; padding:5px 16px; border-radius:28px; font-size:clamp(12px,1.8vw,15px); font-weight:800; box-shadow:0 4px 14px rgba(168,85,247,.5); }
+
+  /* Countdown overlay */
+  #countdown {
+    display:none; position:absolute; inset:0; background:rgba(10,14,46,.7);
+    flex-direction:column; align-items:center; justify-content:center; z-index:25; backdrop-filter:blur(4px);
+  }
+  #countdown.show { display:flex; }
+  #countNum { font-size:clamp(100px,20vw,180px); font-weight:800; color:white; line-height:1; animation:countPop .5s cubic-bezier(.34,1.56,.64,1); text-shadow:0 0 60px rgba(168,85,247,.8); }
+  @keyframes countPop { from{transform:scale(2);opacity:0;} to{transform:scale(1);opacity:1;} }
+  #countdown p { font-family:'Nunito',sans-serif; font-size:clamp(16px,3vw,24px); color:rgba(255,255,255,.7); font-weight:700; margin-top:10px; }
+
+  /* Loading */
+  #loading { position:absolute; inset:0; background:rgba(10,14,46,.97); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; z-index:20; }
+  #loading h2 { color:white; font-size:clamp(22px,4vw,32px); font-weight:800; }
+  #loading p  { color:rgba(255,255,255,.6); font-family:'Nunito',sans-serif; font-size:clamp(13px,2vw,18px); font-weight:700; text-align:center; padding:0 20px; }
+  .spinner { width:56px; height:56px; border:4px solid rgba(168,85,247,.2); border-top-color:#a855f7; border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg);} }
+
+  /* Catch flash */
+  #catchFlash { position:absolute; inset:0; pointer-events:none; z-index:15; opacity:0; }
+  #catchFlash.flash { animation:flashAnim .5s ease-out; }
+  @keyframes flashAnim { 0%{opacity:.45;} 100%{opacity:0;} }
+
+  /* Game Over */
+  #gameover { display:none; position:absolute; inset:0; background:rgba(10,14,46,.92); flex-direction:column; align-items:center; justify-content:center; z-index:30; gap:14px; backdrop-filter:blur(8px); }
+  #gameover.show { display:flex; }
+  @keyframes wBounce { 0%,100%{transform:translateY(0) rotate(-5deg);} 50%{transform:translateY(-18px) rotate(5deg);} }
+  #gameover .go-emoji { font-size:clamp(60px,10vw,90px); animation:wBounce 1.5s ease-in-out infinite; }
+  #gameover h2 { font-size:clamp(28px,5.5vw,56px); font-weight:800; background:linear-gradient(135deg,var(--yellow),var(--orange)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .go-score-wrap { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.15); border-radius:22px; padding:18px 44px; text-align:center; }
+  .go-score-label { color:rgba(255,255,255,.5); font-family:'Nunito'; font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; }
+  .go-score-num   { font-size:clamp(44px,8vw,76px); font-weight:800; color:var(--yellow); text-shadow:0 0 36px rgba(255,217,61,.6); line-height:1; }
+  .go-score-msg   { color:rgba(255,255,255,.5); font-family:'Nunito'; font-size:14px; font-weight:700; margin-top:4px; }
+  .go-buttons { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-top:6px; }
+  .go-btn { padding:14px 36px; border-radius:50px; border:none; font-family:'Baloo 2',cursive; font-size:clamp(15px,2.5vw,19px); font-weight:800; cursor:pointer; transition:transform .2s,box-shadow .2s; }
+  .go-btn:hover { transform:scale(1.06); }
+  .go-btn:active { transform:scale(.96); }
+  .go-btn-play { background:linear-gradient(135deg,#a855f7,#ec4899); color:white; box-shadow:0 6px 28px rgba(168,85,247,.5); }
+  .go-btn-home { background:rgba(255,255,255,.1); color:white; border:1px solid rgba(255,255,255,.2); }
+
+  /* Back button */
+  #backBtn { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); padding:9px 26px; border-radius:40px; border:1px solid rgba(255,255,255,.2); background:rgba(0,0,0,.4); color:rgba(255,255,255,.6); font-family:'Baloo 2',cursive; font-size:13px; font-weight:700; cursor:pointer; z-index:10; transition:all .2s; }
+  #backBtn:hover { background:rgba(0,0,0,.7); color:white; }
+
+  /* Permission error */
+  #permError { display:none; position:absolute; inset:0; background:rgba(10,14,46,.97); flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:25; text-align:center; padding:28px; }
+  #permError.show { display:flex; }
+  #permError .pe-icon { font-size:56px; }
+  #permError h2 { color:white; font-size:clamp(20px,4vw,28px); font-weight:800; }
+  #permError p  { color:rgba(255,255,255,.6); font-family:'Nunito'; font-size:clamp(13px,2vw,16px); font-weight:700; max-width:400px; line-height:1.6; }
+  #permError button { padding:13px 34px; border-radius:40px; border:none; background:linear-gradient(135deg,#a855f7,#ec4899); color:white; font-family:'Baloo 2'; font-size:clamp(15px,2.5vw,18px); font-weight:800; cursor:pointer; margin-top:6px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ GAME ═══════════════════ -->
+<div id="game">
+  <video id="video" playsinline autoplay muted></video>
+  <canvas id="canvas"></canvas>
+
+  <div id="hud">
+    <div class="hud-score">
+      <span>🦋</span>
+      <span class="score-val" id="scoreVal">0</span>
+      <span>caught</span>
+    </div>
+    <div class="hud-timer">
+      <span class="timer-val" id="timerVal">60</span>
+      <span class="timer-label">sec</span>
+    </div>
+    <div><div class="level-badge" id="levelBadge">Level 1</div></div>
+  </div>
+
+  <div id="catchFlash"></div>
+
+  <!-- Countdown -->
+  <div id="countdown">
+    <div id="countNum">3</div>
+    <p>Get ready to catch butterflies! 🦋</p>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <h2>🦋 Getting Ready...</h2>
+    <p id="loadingMsg">Starting your webcam...</p>
+  </div>
+
+  <!-- Permission error -->
+  <div id="permError">
+    <div class="pe-icon">📷</div>
+    <h2>Camera Needed!</h2>
+    <p>We need your webcam to detect your body movements. Please allow camera access and try again!</p>
+    <button onclick="retryCamera()">Try Again 📷</button>
+  </div>
+
+  <!-- Game Over -->
+  <div id="gameover">
+    <div class="go-emoji" id="goEmoji">🏆</div>
+    <h2>Amazing Job!</h2>
+    <div class="go-score-wrap">
+      <div class="go-score-label">Butterflies Caught</div>
+      <div class="go-score-num" id="finalScore">0</div>
+      <div class="go-score-msg" id="finalMsg"></div>
+    </div>
+    <div class="go-buttons">
+      <button class="go-btn go-btn-play" onclick="restartGame()">🔄 Play Again!</button>
+      <button class="go-btn go-btn-home" onclick="goHome()">🏠 Home</button>
+    </div>
+  </div>
+
+  <button id="backBtn" onclick="goHome()">← Back to Menu</button>
+</div>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+<script>
+// ════════════════════════════════════════════════════
+//  GAME STATE
+// ════════════════════════════════════════════════════
+const GAME_DURATION=60;
+const BF_COLORS=[
+  {wings:'#e879f9',body:'#c026d3',glow:'rgba(232,121,249,.55)'},
+  {wings:'#fb923c',body:'#ea580c',glow:'rgba(251,146,60,.55)'},
+  {wings:'#34d399',body:'#059669',glow:'rgba(52,211,153,.55)'},
+  {wings:'#60a5fa',body:'#2563eb',glow:'rgba(96,165,250,.55)'},
+  {wings:'#fbbf24',body:'#d97706',glow:'rgba(251,191,36,.55)'},
+  {wings:'#f472b6',body:'#db2777',glow:'rgba(244,114,182,.55)'},
+  {wings:'#a78bfa',body:'#7c3aed',glow:'rgba(167,139,250,.55)'},
+  {wings:'#f87171',body:'#dc2626',glow:'rgba(248,113,113,.55)'},
+];
+
+let butterflies=[], particles=[], scorePops=[], bgStars=[];
+let score=0, timeLeft=GAME_DURATION, gameActive=false;
+let gameTimer=null, animFrame=null;
+let poseKeypoints=[];
+let level=1, lastSpawnTime=0;
+let pose=null, mpCamera=null;
+
+const video=document.getElementById('video');
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+
+// ════════════════════════════════════════════════════
+//  BUTTERFLY
+// ════════════════════════════════════════════════════
+class Butterfly {
+  constructor(){
+    this.id=Math.random().toString(36).substr(2,9);
+    this.color=BF_COLORS[Math.floor(Math.random()*BF_COLORS.length)];
+    this.size=70+Math.random()*30;
+    const W=canvas.width, H=canvas.height;
+    const edge=Math.floor(Math.random()*4);
+    if(edge===0){this.x=Math.random()*W;this.y=-this.size;}
+    else if(edge===1){this.x=W+this.size;this.y=Math.random()*H;}
+    else if(edge===2){this.x=Math.random()*W;this.y=H+this.size;}
+    else{this.x=-this.size;this.y=Math.random()*H;}
+    this.tx=W*.12+Math.random()*W*.76;
+    this.ty=H*.12+Math.random()*H*.76;
+    this.speed=(1.1+Math.random()*1.1)*(1+(level-1)*.18);
+    this.vx=0;this.vy=0;
+    this.wingPhase=Math.random()*Math.PI*2;
+    this.wingSpeed=.16+Math.random()*.1;
+    this.alpha=0; this.caught=false; this.catchAnim=0;
+    this.alive=true; this.age=0;
+    this.wanderAngle=Math.atan2(this.ty-this.y,this.tx-this.x);
+    this.wanderTimer=0;
+  }
+  update(){
+    if(this.caught){this.catchAnim+=.07;this.alpha=Math.max(0,1-this.catchAnim);this.size*=1.035;if(this.catchAnim>=1)this.alive=false;return;}
+    this.age++;
+    if(this.alpha<1)this.alpha=Math.min(1,this.alpha+.055);
+    this.wanderTimer++;
+    if(this.wanderTimer>80+Math.random()*60){
+      this.wanderTimer=0;
+      this.tx=canvas.width*.08+Math.random()*canvas.width*.84;
+      this.ty=canvas.height*.08+Math.random()*canvas.height*.84;
+    }
+    const ang=Math.atan2(this.ty-this.y,this.tx-this.x);
+    this.wanderAngle+=(ang-this.wanderAngle)*.025;
+    this.vx+=Math.cos(this.wanderAngle)*.14;
+    this.vy+=Math.sin(this.wanderAngle)*.14;
+    const spd=Math.sqrt(this.vx*this.vx+this.vy*this.vy);
+    const maxSpd=this.speed*1.4;
+    if(spd>maxSpd){this.vx=this.vx/spd*maxSpd;this.vy=this.vy/spd*maxSpd;}
+    const perp=this.wanderAngle+Math.PI*.5;
+    const wave=Math.sin(this.age*.05+this.wanderAngle)*0.45;
+    this.x+=this.vx+Math.cos(perp)*wave;
+    this.y+=this.vy+Math.sin(perp)*wave;
+    this.wingPhase+=this.wingSpeed;
+    const W=canvas.width,H=canvas.height,pad=50;
+    if(this.x<pad)this.vx+=.35;
+    if(this.x>W-pad)this.vx-=.35;
+    if(this.y<pad)this.vy+=.35;
+    if(this.y>H-pad)this.vy-=.35;
+    if(this.age>2200)this.alive=false;
+  }
+  draw(c){
+    if(!this.alive)return;
+    c.save();
+    c.globalAlpha=this.alpha;
+    c.translate(this.x,this.y);
+    const dir=Math.atan2(this.vy,this.vx);
+    c.rotate(dir+Math.PI*.5);
+    const wing=Math.abs(Math.sin(this.wingPhase));
+    const s=this.size;
+    const g=c.createRadialGradient(0,0,0,0,0,s*1.8);
+    g.addColorStop(0,this.color.glow);g.addColorStop(1,'transparent');
+    c.beginPath();c.arc(0,0,s*1.8,0,Math.PI*2);c.fillStyle=g;c.fill();
+    c.save();c.scale(-wing,1);
+    c.beginPath();c.moveTo(0,-s*.1);c.bezierCurveTo(-s*.9,-s*.7,-s*1.1,s*.3,-s*.1,s*.2);
+    c.fillStyle=this.color.wings;c.globalAlpha=this.alpha*.88;c.fill();
+    c.beginPath();c.arc(-s*.42,-s*.12,s*.19,0,Math.PI*2);
+    c.fillStyle='rgba(255,255,255,.32)';c.fill();
+    c.restore();
+    c.save();c.scale(wing,1);
+    c.beginPath();c.moveTo(0,-s*.1);c.bezierCurveTo(s*.9,-s*.7,s*1.1,s*.3,s*.1,s*.2);
+    c.fillStyle=this.color.wings;c.globalAlpha=this.alpha*.88;c.fill();
+    c.beginPath();c.arc(s*.42,-s*.12,s*.19,0,Math.PI*2);
+    c.fillStyle='rgba(255,255,255,.32)';c.fill();
+    c.restore();
+    c.globalAlpha=this.alpha;
+    c.beginPath();c.ellipse(0,0,s*.1,s*.48,0,0,Math.PI*2);c.fillStyle=this.color.body;c.fill();
+    c.beginPath();c.arc(0,-s*.48,s*.12,0,Math.PI*2);c.fillStyle=this.color.body;c.fill();
+    c.beginPath();
+    c.moveTo(0,-s*.48);c.bezierCurveTo(-s*.28,-s*.88,-s*.38,-s*1.05,-s*.34,-s*1.18);
+    c.moveTo(0,-s*.48);c.bezierCurveTo( s*.28,-s*.88, s*.38,-s*1.05, s*.34,-s*1.18);
+    c.strokeStyle=this.color.body;c.lineWidth=1.5;c.stroke();
+    c.beginPath();c.arc(-s*.34,-s*1.18,2.5,0,Math.PI*2);c.arc(s*.34,-s*1.18,2.5,0,Math.PI*2);
+    c.fillStyle=this.color.body;c.fill();
+    c.restore();
+  }
+  hit(px,py){return !this.caught&&this.alive&&Math.hypot(px-this.x,py-this.y)<this.size*2.2;}
+}
+
+// ════════════════════════════════════════════════════
+//  PARTICLES
+// ════════════════════════════════════════════════════
+class Particle{
+  constructor(x,y,color){
+    this.x=x;this.y=y;
+    this.vx=(Math.random()-.5)*9;this.vy=(Math.random()-.5)*9-2;
+    this.alpha=1;this.color=color;this.size=3+Math.random()*6;
+    this.emojis=['⭐','✨','💫','🌸','🎀','💖','🌟'];
+    this.isEmoji=Math.random()<.38;
+    this.emoji=this.emojis[Math.floor(Math.random()*this.emojis.length)];
+    this.rot=Math.random()*Math.PI*2;this.rotV=(Math.random()-.5)*.28;
+  }
+  update(){this.x+=this.vx;this.y+=this.vy;this.vy+=.22;this.alpha-=.024;this.rot+=this.rotV;this.vx*=.98;}
+  draw(c){
+    if(this.alpha<=0)return;
+    c.save();c.globalAlpha=Math.max(0,this.alpha);c.translate(this.x,this.y);c.rotate(this.rot);
+    if(this.isEmoji){c.font=`${this.size*3}px serif`;c.textAlign='center';c.textBaseline='middle';c.fillText(this.emoji,0,0);}
+    else{c.beginPath();c.arc(0,0,this.size,0,Math.PI*2);c.fillStyle=this.color;c.fill();}
+    c.restore();
+  }
+}
+
+class ScorePop{
+  constructor(x,y,text){this.x=x;this.y=y;this.text=text;this.alpha=1;this.vy=-2.2;this.scale=.4;}
+  update(){this.y+=this.vy;this.vy*=.94;this.alpha-=.02;this.scale=Math.min(1.2,this.scale+.1);}
+  draw(c){
+    if(this.alpha<=0)return;
+    c.save();c.globalAlpha=this.alpha;c.translate(this.x,this.y);c.scale(this.scale,this.scale);
+    c.font='bold 38px "Baloo 2",cursive';c.textAlign='center';c.textBaseline='middle';
+    c.strokeStyle='rgba(0,0,0,.5)';c.lineWidth=5;c.strokeText(this.text,0,0);
+    c.fillStyle='#FFD93D';c.fillText(this.text,0,0);
+    c.restore();
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  POSE / BODY DETECTION
+// ════════════════════════════════════════════════════
+const CATCH_LANDMARKS=[15,16,17,18,19,20,21,22]; // wrists + hand tips only
+const SKELETON_EDGES=[[11,13],[13,15],[12,14],[14,16],[11,12],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[0,11],[0,12]];
+
+function initPose(){
+  pose=new Pose({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+  pose.setOptions({modelComplexity:0,smoothLandmarks:true,enableSegmentation:false,minDetectionConfidence:.5,minTrackingConfidence:.5});
+  pose.onResults(res=>{
+    if(!gameActive)return;
+    if(res.poseLandmarks){
+      const W=canvas.width,H=canvas.height;
+      poseKeypoints=res.poseLandmarks.map(lm=>({x:(1-lm.x)*W,y:lm.y*H,v:lm.visibility||0}));
+      checkCollisions();
+    } else { poseKeypoints=[]; }
+  });
+}
+
+function checkCollisions(){
+  butterflies.forEach(bf=>{
+    if(bf.caught||!bf.alive)return;
+    CATCH_LANDMARKS.forEach(idx=>{
+      if(idx>=poseKeypoints.length)return;
+      const kp=poseKeypoints[idx];
+      if(!kp||kp.v<.25)return;
+      if(bf.hit(kp.x,kp.y)) catchButterfly(bf);
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  AUDIO
+// ════════════════════════════════════════════════════
+let audioCtx=null;
+const NOTES=[261.63,293.66,329.63,392,440,523.25,587.33,659.25,783.99,880];
+let noteIdx=0;
+function playPop(){
+  try{
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
+    osc.connect(gain);gain.connect(audioCtx.destination);
+    osc.type='sine';
+    const freq=NOTES[noteIdx%NOTES.length]; noteIdx++;
+    osc.frequency.setValueAtTime(freq,audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(freq*1.6,audioCtx.currentTime+.15);
+    gain.gain.setValueAtTime(.35,audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.45);
+    osc.start();osc.stop(audioCtx.currentTime+.45);
+  }catch(e){}
+}
+
+// ════════════════════════════════════════════════════
+//  CATCH BUTTERFLY
+// ════════════════════════════════════════════════════
+function catchButterfly(bf){
+  if(bf.caught)return;
+  bf.caught=true;
+  score++;
+  document.getElementById('scoreVal').textContent=score;
+  level=Math.min(6,1+Math.floor(score/5));
+  document.getElementById('levelBadge').textContent=`Level ${level}`;
+  for(let i=0;i<20;i++) particles.push(new Particle(bf.x,bf.y,bf.color.wings));
+  scorePops.push(new ScorePop(bf.x,bf.y-50,'+1 🦋'));
+  const flash=document.getElementById('catchFlash');
+  flash.style.background=bf.color.glow;
+  flash.classList.remove('flash');
+  requestAnimationFrame(()=>flash.classList.add('flash'));
+  flash.addEventListener('animationend',()=>flash.classList.remove('flash'),{once:true});
+  playPop();
+}
+
+// ════════════════════════════════════════════════════
+//  DRAW SKELETON OVERLAY
+// ════════════════════════════════════════════════════
+function drawBodyOverlay(){
+  if(!poseKeypoints.length)return;
+  ctx.save();
+  SKELETON_EDGES.forEach(([a,b])=>{
+    if(a>=poseKeypoints.length||b>=poseKeypoints.length)return;
+    const pa=poseKeypoints[a],pb=poseKeypoints[b];
+    if(!pa||!pb||pa.v<.25||pb.v<.25)return;
+    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);
+    ctx.strokeStyle='rgba(168,85,247,.45)';ctx.lineWidth=3;ctx.lineCap='round';ctx.stroke();
+  });
+  poseKeypoints.forEach((kp,idx)=>{
+    if(!kp||kp.v<.42)return;
+    const isHand=CATCH_LANDMARKS.includes(idx);
+    ctx.beginPath();ctx.arc(kp.x,kp.y,isHand?13:5,0,Math.PI*2);
+    if(isHand){
+      const g=ctx.createRadialGradient(kp.x,kp.y,0,kp.x,kp.y,16);
+      g.addColorStop(0,'rgba(232,121,249,.95)');g.addColorStop(1,'rgba(232,121,249,0)');
+      ctx.fillStyle=g;
+    } else { ctx.fillStyle='rgba(168,85,247,.55)'; }
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+// ════════════════════════════════════════════════════
+//  BACKGROUND STARS
+// ════════════════════════════════════════════════════
+function initBgStars(){
+  bgStars=[];
+  for(let i=0;i<55;i++)bgStars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*2+.4,a:Math.random(),s:Math.random()*.012+.004});
+}
+
+// ════════════════════════════════════════════════════
+//  MAIN LOOP
+// ════════════════════════════════════════════════════
+function gameLoop(){
+  if(!gameActive)return;
+  animFrame=requestAnimationFrame(gameLoop);
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='rgba(10,14,46,.22)';ctx.fillRect(0,0,W,H);
+  bgStars.forEach(s=>{
+    s.a+=s.s*(Math.random()>.5?1:-1);s.a=Math.max(.04,Math.min(.75,s.a));
+    ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${s.a})`;ctx.fill();
+  });
+  butterflies.forEach(b=>{b.update();b.draw(ctx);});
+  butterflies=butterflies.filter(b=>b.alive);
+  const now=Date.now();
+  const interval=Math.max(700,2000-(level-1)*280);
+  if(now-lastSpawnTime>interval){
+    const max=1+level;
+    if(butterflies.filter(b=>b.alive&&!b.caught).length<max){
+      butterflies.push(new Butterfly());lastSpawnTime=now;
+    }
+  }
+  drawBodyOverlay();
+  particles.forEach(p=>{p.update();p.draw(ctx);}); particles=particles.filter(p=>p.alpha>0);
+  scorePops.forEach(sp=>{sp.update();sp.draw(ctx);}); scorePops=scorePops.filter(sp=>sp.alpha>0);
+}
+
+// ════════════════════════════════════════════════════
+//  TIMER
+// ════════════════════════════════════════════════════
+function startTimer(){
+  timeLeft=GAME_DURATION;updateTimerEl();
+  gameTimer=setInterval(()=>{timeLeft--;updateTimerEl();if(timeLeft<=0)endGame();},1000);
+}
+function updateTimerEl(){
+  const el=document.getElementById('timerVal');
+  el.textContent=timeLeft;
+  el.className='timer-val'+(timeLeft<=10?' urgent':'');
+}
+
+// ════════════════════════════════════════════════════
+//  COUNTDOWN
+// ════════════════════════════════════════════════════
+function showCountdown(){
+  return new Promise(resolve=>{
+    const overlay=document.getElementById('countdown');
+    const num=document.getElementById('countNum');
+    overlay.classList.add('show');
+    let count=3;
+    num.textContent=count;
+    const tick=()=>{
+      count--;
+      if(count<=0){
+        num.textContent='GO! 🦋';
+        setTimeout(()=>{overlay.classList.remove('show');resolve();},700);
+      } else {
+        num.textContent=count;
+        num.style.animation='none';
+        requestAnimationFrame(()=>requestAnimationFrame(()=>num.style.animation='countPop .5s cubic-bezier(.34,1.56,.64,1)'));
+        setTimeout(tick,1000);
+      }
+    };
+    num.style.animation='none';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>num.style.animation='countPop .5s cubic-bezier(.34,1.56,.64,1)'));
+    setTimeout(tick,1000);
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  GAME FLOW
+// ════════════════════════════════════════════════════
+async function setupCamera(){
+  const msg=document.getElementById('loadingMsg');
+  try{
+    msg.textContent='Starting your webcam...';
+    const stream=await navigator.mediaDevices.getUserMedia({video:{width:1280,height:720,facingMode:'user'},audio:false});
+    video.srcObject=stream;
+    await new Promise(r=>{video.onloadedmetadata=r;});
+    await video.play();
+    video.classList.add('visible');
+    msg.textContent='Loading body tracking AI... 🤖';
+    initPose();
+    mpCamera=new Camera(video,{
+      onFrame:async()=>{if(pose)await pose.send({image:video});},
+      width:1280,height:720
+    });
+    await mpCamera.start();
+    resizeCanvas();
+    window.addEventListener('resize',resizeCanvas);
+    msg.textContent='Almost ready... 🦋';
+    await new Promise(r=>setTimeout(r,1800));
+    document.getElementById('loading').style.display='none';
+    await showCountdown();
+    beginPlay();
+  }catch(err){
+    console.error(err);
+    document.getElementById('loading').style.display='none';
+    document.getElementById('permError').classList.add('show');
+  }
+}
+
+function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;initBgStars();}
+
+function beginPlay(){
+  score=0;level=1;butterflies=[];particles=[];scorePops=[];poseKeypoints=[];lastSpawnTime=0;
+  document.getElementById('scoreVal').textContent='0';
+  document.getElementById('levelBadge').textContent='Level 1';
+  document.getElementById('gameover').classList.remove('show');
+  gameActive=true;
+  butterflies.push(new Butterfly());butterflies.push(new Butterfly());
+  lastSpawnTime=Date.now();
+  startTimer();gameLoop();
+}
+
+function endGame(){
+  gameActive=false;clearInterval(gameTimer);cancelAnimationFrame(animFrame);
+  const msgs=['🦋 Keep trying!','🌟 Great start!','🎉 Amazing!','🏆 Superstar!','👑 Legendary!'];
+  const mIdx=score===0?0:score<5?1:score<10?2:score<18?3:4;
+  const emojis=['😊','🌟','🎉','🏆','👑'];
+  document.getElementById('finalScore').textContent=score;
+  document.getElementById('finalMsg').textContent=msgs[mIdx];
+  document.getElementById('goEmoji').textContent=emojis[mIdx];
+  document.getElementById('gameover').classList.add('show');
+}
+
+function restartGame(){document.getElementById('gameover').classList.remove('show');beginPlay();}
+
+function goHome(){
+  window.location.href='index.html';
+}
+
+function retryCamera(){
+  document.getElementById('permError').classList.remove('show');
+  document.getElementById('loading').style.display='flex';
+  setupCamera();
+}
+
+// Auto-start when page is fully loaded (scripts + MediaPipe available)
+window.addEventListener('load', ()=>{ setupCamera(); });
+</script>
+</body>
+</html>

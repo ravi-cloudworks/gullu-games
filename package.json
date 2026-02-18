@@ -1,0 +1,12 @@
+{
+  "name": "gullu-games",
+  "version": "1.0.0",
+  "description": "Gullu Play Zone - toddler webcam games",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "terser": "^5.31.0",
+    "html-minifier-terser": "^7.2.0"
+  }
+}

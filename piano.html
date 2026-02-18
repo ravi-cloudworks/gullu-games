@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎹 Finger Piano!</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;800&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg:#0a0e2e; --purple:#a855f7; --pink:#ec4899;
+    --yellow:#FFD93D; --mint:#43E97B; --blue:#38bdf8; --orange:#FF9A3C;
+  }
+  body { font-family:'Baloo 2',cursive; background:var(--bg); overflow:hidden; height:100vh; width:100vw; user-select:none; }
+
+  #video {
+    position:fixed; inset:0; width:100%; height:100%;
+    object-fit:cover; transform:scaleX(-1); opacity:0; transition:opacity 1s;
+  }
+  #video.visible { opacity:1; }
+  #canvas { position:fixed; inset:0; width:100%; height:100%; }
+
+  /* HUD */
+  #hud {
+    position:fixed; top:0; left:0; right:0;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 20px;
+    background:linear-gradient(180deg,rgba(10,14,46,.88) 0%,transparent 100%);
+    z-index:10; pointer-events:none;
+  }
+  .hud-score { display:flex; align-items:center; gap:8px; }
+  .hud-score span { font-size:clamp(13px,2vw,18px); color:rgba(255,255,255,.7); font-weight:700; font-family:'Nunito',sans-serif; text-transform:uppercase; letter-spacing:1px; }
+  .score-val { font-size:clamp(26px,5vw,44px)!important; font-weight:800!important; color:var(--yellow)!important; text-shadow:0 0 18px rgba(255,217,61,.8); letter-spacing:-1px!important; font-family:'Baloo 2',cursive!important; }
+  .hud-timer { display:flex; align-items:center; gap:7px; }
+  .timer-val { font-size:clamp(26px,5vw,44px); font-weight:800; color:white; font-family:'Baloo 2',cursive; min-width:72px; text-align:center; }
+  .timer-val.urgent { color:#ff4d4d; animation:urgentPulse .5s ease-in-out infinite; }
+  @keyframes urgentPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.15);} }
+  .timer-label { font-size:clamp(11px,1.8vw,15px); color:rgba(255,255,255,.6); font-family:'Nunito',sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:1px; }
+  .encourage-badge { background:linear-gradient(135deg,var(--mint),#38f9d7); color:#0a2e18; padding:5px 16px; border-radius:28px; font-size:clamp(12px,1.8vw,15px); font-weight:800; box-shadow:0 4px 14px rgba(67,233,123,.5); }
+
+  /* Countdown overlay */
+  #countdown {
+    display:none; position:fixed; inset:0; background:rgba(10,14,46,.7);
+    flex-direction:column; align-items:center; justify-content:center; z-index:25; backdrop-filter:blur(4px);
+  }
+  #countdown.show { display:flex; }
+  #countNum { font-size:clamp(100px,20vw,180px); font-weight:800; color:white; line-height:1; animation:countPop .5s cubic-bezier(.34,1.56,.64,1); text-shadow:0 0 60px rgba(67,233,123,.8); }
+  @keyframes countPop { from{transform:scale(2);opacity:0;} to{transform:scale(1);opacity:1;} }
+  #countdown p { font-family:'Nunito',sans-serif; font-size:clamp(16px,3vw,24px); color:rgba(255,255,255,.7); font-weight:700; margin-top:10px; }
+
+  /* Loading */
+  #loading { position:fixed; inset:0; background:rgba(10,14,46,.97); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; z-index:20; }
+  #loading h2 { color:white; font-size:clamp(22px,4vw,32px); font-weight:800; }
+  #loading p  { color:rgba(255,255,255,.6); font-family:'Nunito',sans-serif; font-size:clamp(13px,2vw,18px); font-weight:700; text-align:center; padding:0 20px; }
+  .spinner { width:56px; height:56px; border:4px solid rgba(67,233,123,.2); border-top-color:#43E97B; border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg);} }
+
+  /* Game Over */
+  #gameover { display:none; position:fixed; inset:0; background:rgba(10,14,46,.92); flex-direction:column; align-items:center; justify-content:center; z-index:30; gap:14px; backdrop-filter:blur(8px); }
+  #gameover.show { display:flex; }
+  @keyframes goBounce { 0%,100%{transform:translateY(0) rotate(-5deg);} 50%{transform:translateY(-18px) rotate(5deg);} }
+  #gameover .go-emoji { font-size:clamp(60px,10vw,90px); animation:goBounce 1.5s ease-in-out infinite; }
+  #gameover h2 { font-size:clamp(28px,5.5vw,56px); font-weight:800; background:linear-gradient(135deg,var(--mint),var(--blue)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .go-score-wrap { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.15); border-radius:22px; padding:18px 44px; text-align:center; }
+  .go-score-label { color:rgba(255,255,255,.5); font-family:'Nunito'; font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; }
+  .go-score-num   { font-size:clamp(44px,8vw,76px); font-weight:800; color:var(--mint); text-shadow:0 0 36px rgba(67,233,123,.6); line-height:1; }
+  .go-score-msg   { color:rgba(255,255,255,.5); font-family:'Nunito'; font-size:14px; font-weight:700; margin-top:4px; }
+  .go-buttons { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-top:6px; }
+  .go-btn { padding:14px 36px; border-radius:50px; border:none; font-family:'Baloo 2',cursive; font-size:clamp(15px,2.5vw,19px); font-weight:800; cursor:pointer; transition:transform .2s,box-shadow .2s; }
+  .go-btn:hover { transform:scale(1.06); }
+  .go-btn:active { transform:scale(.96); }
+  .go-btn-play { background:linear-gradient(135deg,#43E97B,#38f9d7); color:#0a2e18; box-shadow:0 6px 28px rgba(67,233,123,.5); }
+  .go-btn-home { background:rgba(255,255,255,.1); color:white; border:1px solid rgba(255,255,255,.2); }
+
+  /* Back button */
+  #backBtn { position:fixed; top:12px; right:12px; padding:9px 18px; border-radius:40px; border:1px solid rgba(255,255,255,.2); background:rgba(0,0,0,.4); color:rgba(255,255,255,.6); font-family:'Baloo 2',cursive; font-size:13px; font-weight:700; cursor:pointer; z-index:10; transition:all .2s; pointer-events:auto; }
+  #backBtn:hover { background:rgba(0,0,0,.7); color:white; }
+
+  /* Permission error */
+  #permError { display:none; position:fixed; inset:0; background:rgba(10,14,46,.97); flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:25; text-align:center; padding:28px; }
+  #permError.show { display:flex; }
+  #permError .pe-icon { font-size:56px; }
+  #permError h2 { color:white; font-size:clamp(20px,4vw,28px); font-weight:800; }
+  #permError p  { color:rgba(255,255,255,.6); font-family:'Nunito'; font-size:clamp(13px,2vw,16px); font-weight:700; max-width:400px; line-height:1.6; }
+  #permError button { padding:13px 34px; border-radius:40px; border:none; background:linear-gradient(135deg,#43E97B,#38f9d7); color:#0a2e18; font-family:'Baloo 2'; font-size:clamp(15px,2.5vw,18px); font-weight:800; cursor:pointer; margin-top:6px; }
+</style>
+</head>
+<body>
+
+<video id="video" playsinline autoplay muted></video>
+<canvas id="canvas"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-score">
+    <span>🎵</span>
+    <span class="score-val" id="scoreVal">0</span>
+    <span>notes</span>
+  </div>
+  <div class="hud-timer">
+    <span class="timer-val" id="timerVal">60</span>
+    <span class="timer-label">sec</span>
+  </div>
+  <div><div class="encourage-badge">Keep Playing! 🎹</div></div>
+</div>
+
+<!-- Back button -->
+<button id="backBtn" onclick="goHome()">← Home</button>
+
+<!-- Countdown -->
+<div id="countdown">
+  <div id="countNum">3</div>
+  <p>Get ready to play! 🎹</p>
+</div>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <h2>🎹 Getting Ready...</h2>
+  <p id="loadingMsg">Starting your webcam...</p>
+</div>
+
+<!-- Permission error -->
+<div id="permError">
+  <div class="pe-icon">📷</div>
+  <h2>Camera Needed!</h2>
+  <p>We need your webcam to detect your hand movements. Please allow camera access and try again!</p>
+  <button onclick="retryCamera()">Try Again 📷</button>
+</div>
+
+<!-- Game Over -->
+<div id="gameover">
+  <div class="go-emoji" id="goEmoji">🏆</div>
+  <h2>Beautiful Music!</h2>
+  <div class="go-score-wrap">
+    <div class="go-score-label">Notes Played</div>
+    <div class="go-score-num" id="finalScore">0</div>
+    <div class="go-score-msg" id="finalMsg"></div>
+  </div>
+  <div class="go-buttons">
+    <button class="go-btn go-btn-play" onclick="restartGame()">🔄 Play Again!</button>
+    <button class="go-btn go-btn-home" onclick="goHome()">🏠 Home</button>
+  </div>
+</div>
+
+<!-- MediaPipe Hands -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<script>
+// ════════════════════════════════════════════════════
+//  CONSTANTS
+// ════════════════════════════════════════════════════
+const GAME_DURATION = 60;
+const INDEX_TIP = 8;                          // index fingertip landmark id
+const HAND_COLORS = ['#e879f9', '#38bdf8'];   // hand 0 = pink, hand 1 = cyan
+
+const NOTE_FREQS = {
+  'C3':130.81,'D3':146.83,'E3':164.81,'F3':174.61,'G3':196,'A3':220,'B3':246.94,
+  'C4':261.63,'D4':293.66,'E4':329.63,'F4':349.23,'G4':392,'A4':440,'B4':493.88,'C5':523.25,
+  'C#3':138.59,'D#3':155.56,'F#3':185,'G#3':207.65,'A#3':233.08,
+  'C#4':277.18,'D#4':311.13,'F#4':369.99,'G#4':415.3,'A#4':466.16
+};
+
+const WHITE_NOTES = ['C3','D3','E3','F3','G3','A3','B3','C4','D4','E4','F4','G4','A4','B4','C5'];
+const BLACK_KEYS_DEF = [
+  {note:'C#3',lwi:0},{note:'D#3',lwi:1},{note:'F#3',lwi:3},
+  {note:'G#3',lwi:4},{note:'A#3',lwi:5},{note:'C#4',lwi:7},
+  {note:'D#4',lwi:8},{note:'F#4',lwi:10},{note:'G#4',lwi:11},{note:'A#4',lwi:12}
+];
+
+// Hand skeleton connections (MediaPipe standard)
+const HAND_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17]
+];
+
+// ════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════
+let keys = [];
+let keyPressTimes = {};
+let handLandmarks = [];
+let scorePops = [];
+let bgStars = [];
+let score = 0;
+let timeLeft = GAME_DURATION;
+let gameActive = false;
+let gameTimer = null;
+let animFrame = null;
+let hands = null, mpCamera = null;
+let audioCtx = null;
+let activeNotes = [null, null];  // one active note node per hand
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// ════════════════════════════════════════════════════
+//  SCORE POP
+// ════════════════════════════════════════════════════
+class ScorePop {
+  constructor(x, y, text) { this.x=x; this.y=y; this.text=text; this.alpha=1; this.vy=-2.4; this.scale=0.4; }
+  update() { this.y+=this.vy; this.vy*=0.93; this.alpha-=0.022; this.scale=Math.min(1.2,this.scale+0.1); }
+  draw(c) {
+    if(this.alpha<=0) return;
+    c.save(); c.globalAlpha=this.alpha; c.translate(this.x,this.y); c.scale(this.scale,this.scale);
+    c.font='bold 32px "Baloo 2",cursive'; c.textAlign='center'; c.textBaseline='middle';
+    c.strokeStyle='rgba(0,0,0,0.5)'; c.lineWidth=5; c.strokeText(this.text,0,0);
+    c.fillStyle='#FFD93D'; c.fillText(this.text,0,0);
+    c.restore();
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  KEY LAYOUT
+// ════════════════════════════════════════════════════
+function buildKeys() {
+  const W = canvas.width, H = canvas.height;
+  const wkw = W / 15;
+  const wkh = H * 0.22;
+  const bkw = wkw * 0.6;
+  const bkh = wkh * 0.62;
+  const keyY = H * 0.78;
+
+  keys = [];
+
+  // White keys
+  WHITE_NOTES.forEach((note, i) => {
+    keys.push({note, x: i * wkw, y: keyY, w: wkw, h: wkh, isBlack: false, pressed: false});
+  });
+
+  // Black keys — center at right edge of left white key
+  BLACK_KEYS_DEF.forEach(({note, lwi}) => {
+    const cx = (lwi + 1) * wkw;
+    keys.push({note, x: cx - bkw * 0.5, y: keyY, w: bkw, h: bkh, isBlack: true, pressed: false});
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  PIANO DRAWING
+// ════════════════════════════════════════════════════
+function drawPiano() {
+  const now = Date.now();
+
+  // White keys first
+  keys.filter(k => !k.isBlack).forEach(key => {
+    ctx.save();
+    if (key.pressed) {
+      ctx.shadowColor = '#FFD93D';
+      ctx.shadowBlur = 22;
+      ctx.fillStyle = '#fffac0';
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    }
+    ctx.fillRect(key.x + 1.5, key.y, key.w - 3, key.h);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(30,30,60,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(key.x + 1.5, key.y, key.w - 3, key.h);
+
+    // Note label
+    const noteName = key.note.replace(/\d/, '');
+    const fontSize = Math.max(9, Math.min(14, key.w * 0.38));
+    ctx.font = `bold ${fontSize}px "Baloo 2",cursive`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = key.pressed ? '#c47d00' : 'rgba(0,0,0,0.32)';
+    ctx.fillText(noteName, key.x + key.w / 2, key.y + key.h - 5);
+
+    ctx.restore();
+  });
+
+  // Black keys on top
+  keys.filter(k => k.isBlack).forEach(key => {
+    ctx.save();
+    if (key.pressed) {
+      ctx.shadowColor = '#a855f7';
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = '#5b21b6';
+    } else {
+      ctx.fillStyle = 'rgba(12,12,30,0.95)';
+    }
+    ctx.fillRect(key.x, key.y, key.w, key.h);
+
+    // Subtle top highlight when not pressed
+    if (!key.pressed) {
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(key.x + 2, key.y, key.w - 4, key.h * 0.28);
+    }
+
+    ctx.restore();
+  });
+
+  // Piano shelf / shadow
+  ctx.save();
+  const topY = keys.find(k => !k.isBlack)?.y ?? canvas.height * 0.78;
+  const grad = ctx.createLinearGradient(0, topY - 12, 0, topY);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, topY - 12, canvas.width, 12);
+  ctx.restore();
+}
+
+// ════════════════════════════════════════════════════
+//  HAND SKELETON
+// ════════════════════════════════════════════════════
+function drawHandSkeleton() {
+  if (!handLandmarks.length) return;
+  const W = canvas.width, H = canvas.height;
+
+  handLandmarks.forEach((hand, handIdx) => {
+    const color = HAND_COLORS[handIdx] || HAND_COLORS[0];
+
+    // Connections
+    ctx.save();
+    HAND_CONNECTIONS.forEach(([a, b]) => {
+      const la = hand[a], lb = hand[b];
+      const ax = (1 - la.x) * W, ay = la.y * H;
+      const bx = (1 - lb.x) * W, by = lb.y * H;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.strokeStyle = 'rgba(168,85,247,0.45)';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    });
+    ctx.restore();
+
+    // Knuckle dots (all landmarks except index tip)
+    hand.forEach((lm, i) => {
+      if (i === INDEX_TIP) return;
+      const x = (1 - lm.x) * W;
+      const y = lm.y * H;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(168,85,247,0.55)';
+      ctx.fill();
+    });
+
+    // Index fingertip — large glowing dot (active pointer)
+    const tip = hand[INDEX_TIP];
+    const fx = (1 - tip.x) * W;
+    const fy = tip.y * H;
+    const grad = ctx.createRadialGradient(fx, fy, 0, fx, fy, 24);
+    grad.addColorStop(0, color);
+    grad.addColorStop(0.5, color + 'aa');
+    grad.addColorStop(1, 'transparent');
+    ctx.beginPath();
+    ctx.arc(fx, fy, 24, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(fx, fy, 9, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  HIT DETECTION
+// ════════════════════════════════════════════════════
+function checkKeyHit(fx, fy, handIdx) {
+  const now = Date.now();
+  const COOLDOWN = 400;
+
+  // Black keys first (they're on top visually)
+  for (const key of keys.filter(k => k.isBlack)) {
+    if (fx >= key.x && fx <= key.x + key.w && fy >= key.y) {
+      const last = keyPressTimes[key.note] || 0;
+      if (now - last > COOLDOWN) {
+        keyPressTimes[key.note] = now;
+        triggerKey(key, handIdx);
+        return;
+      }
+    }
+  }
+  // White keys
+  for (const key of keys.filter(k => !k.isBlack)) {
+    if (fx >= key.x && fx <= key.x + key.w && fy >= key.y) {
+      const last = keyPressTimes[key.note] || 0;
+      if (now - last > COOLDOWN) {
+        keyPressTimes[key.note] = now;
+        triggerKey(key, handIdx);
+        return;
+      }
+    }
+  }
+}
+
+function triggerKey(key, handIdx) {
+  key.pressed = true;
+  setTimeout(() => { key.pressed = false; }, 320);
+  playNote(key.note, handIdx);
+  score++;
+  document.getElementById('scoreVal').textContent = score;
+  scorePops.push(new ScorePop(key.x + key.w / 2, key.y - 16, '+1 🎵'));
+}
+
+// ════════════════════════════════════════════════════
+//  AUDIO — ADDITIVE SYNTHESIS (monophonic per hand)
+// ════════════════════════════════════════════════════
+function playNote(note, handIdx) {
+  const freq = NOTE_FREQS[note];
+  if (!freq) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    const t = audioCtx.currentTime;
+
+    // Stop previous note for this hand (80ms fade-out)
+    const prev = activeNotes[handIdx];
+    if (prev) {
+      prev.gain.cancelScheduledValues(t);
+      prev.gain.setValueAtTime(0.3, t);          // assume sustain level
+      prev.gain.linearRampToValueAtTime(0, t + 0.08);
+      prev.osc1.stop(t + 0.1);
+      prev.osc2.stop(t + 0.1);
+      activeNotes[handIdx] = null;
+    }
+
+    // Build new note
+    const osc1 = audioCtx.createOscillator();
+    const osc2 = audioCtx.createOscillator();
+    const gain2 = audioCtx.createGain();
+    const masterGain = audioCtx.createGain();
+
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(freq, t);
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(freq * 2, t);
+    gain2.gain.setValueAtTime(0.5, t);
+
+    osc1.connect(masterGain);
+    osc2.connect(gain2);
+    gain2.connect(masterGain);
+    masterGain.connect(audioCtx.destination);
+
+    masterGain.gain.setValueAtTime(0, t);
+    masterGain.gain.linearRampToValueAtTime(0.5, t + 0.01);   // attack  10ms
+    masterGain.gain.linearRampToValueAtTime(0.3, t + 0.09);   // decay   80ms → sustain
+    masterGain.gain.setValueAtTime(0.3, t + 1.5);             // hold sustain
+    masterGain.gain.linearRampToValueAtTime(0, t + 2.7);      // release 1.2s
+
+    osc1.start(t); osc2.start(t);
+    osc1.stop(t + 2.7); osc2.stop(t + 2.7);
+
+    // Track so we can stop it early when next key fires
+    const noteRef = { gain: masterGain, osc1, osc2 };
+    activeNotes[handIdx] = noteRef;
+    setTimeout(() => {
+      if (activeNotes[handIdx] === noteRef) activeNotes[handIdx] = null;
+    }, 2800);
+  } catch(e) { console.error(e); }
+}
+
+// ════════════════════════════════════════════════════
+//  BACKGROUND STARS
+// ════════════════════════════════════════════════════
+function initBgStars() {
+  bgStars = [];
+  for (let i = 0; i < 40; i++) {
+    bgStars.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height * 0.75,
+      r: Math.random() * 2 + 0.4,
+      a: Math.random(),
+      s: Math.random() * 0.012 + 0.004
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  HAND RESULTS CALLBACK
+// ════════════════════════════════════════════════════
+function onHandResults(results) {
+  if (!gameActive) return;
+  handLandmarks = results.multiHandLandmarks || [];
+
+  handLandmarks.forEach((hand, handIdx) => {
+    const lm = hand[INDEX_TIP];
+    const fx = (1 - lm.x) * canvas.width;
+    const fy = lm.y * canvas.height;
+    checkKeyHit(fx, fy, handIdx);
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  INIT MEDIAPIPE HANDS
+// ════════════════════════════════════════════════════
+function initHands() {
+  hands = new Hands({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+  hands.setOptions({
+    maxNumHands: 2,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.5
+  });
+  hands.onResults(onHandResults);
+}
+
+// ════════════════════════════════════════════════════
+//  MAIN LOOP
+// ════════════════════════════════════════════════════
+function gameLoop() {
+  if (!gameActive) return;
+  animFrame = requestAnimationFrame(gameLoop);
+  const W = canvas.width, H = canvas.height;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Dark overlay on video
+  ctx.fillStyle = 'rgba(10,14,46,0.18)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Twinkling stars (upper area only)
+  bgStars.forEach(s => {
+    s.a += s.s * (Math.random() > 0.5 ? 1 : -1);
+    s.a = Math.max(0.04, Math.min(0.75, s.a));
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${s.a})`;
+    ctx.fill();
+  });
+
+  // Piano keys
+  drawPiano();
+
+  // Hand skeleton
+  drawHandSkeleton();
+
+  // Score pops
+  scorePops.forEach(sp => { sp.update(); sp.draw(ctx); });
+  scorePops = scorePops.filter(sp => sp.alpha > 0);
+}
+
+// ════════════════════════════════════════════════════
+//  TIMER
+// ════════════════════════════════════════════════════
+function startTimer() {
+  timeLeft = GAME_DURATION;
+  updateTimerEl();
+  gameTimer = setInterval(() => {
+    timeLeft--;
+    updateTimerEl();
+    if (timeLeft <= 0) endGame();
+  }, 1000);
+}
+
+function updateTimerEl() {
+  const el = document.getElementById('timerVal');
+  el.textContent = timeLeft;
+  el.className = 'timer-val' + (timeLeft <= 10 ? ' urgent' : '');
+}
+
+// ════════════════════════════════════════════════════
+//  COUNTDOWN
+// ════════════════════════════════════════════════════
+function showCountdown() {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('countdown');
+    const num = document.getElementById('countNum');
+    overlay.classList.add('show');
+    let count = 3;
+    num.textContent = count;
+    const tick = () => {
+      count--;
+      if (count <= 0) {
+        num.textContent = 'GO! 🎹';
+        setTimeout(() => { overlay.classList.remove('show'); resolve(); }, 700);
+      } else {
+        num.textContent = count;
+        num.style.animation = 'none';
+        requestAnimationFrame(() => requestAnimationFrame(() =>
+          num.style.animation = 'countPop .5s cubic-bezier(.34,1.56,.64,1)'
+        ));
+        setTimeout(tick, 1000);
+      }
+    };
+    num.style.animation = 'none';
+    requestAnimationFrame(() => requestAnimationFrame(() =>
+      num.style.animation = 'countPop .5s cubic-bezier(.34,1.56,.64,1)'
+    ));
+    setTimeout(tick, 1000);
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  GAME FLOW
+// ════════════════════════════════════════════════════
+async function setupCamera() {
+  const msg = document.getElementById('loadingMsg');
+  try {
+    msg.textContent = 'Starting your webcam...';
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {width:1280, height:720, facingMode:'user'}, audio:false
+    });
+    video.srcObject = stream;
+    await new Promise(r => { video.onloadedmetadata = r; });
+    await video.play();
+    video.classList.add('visible');
+
+    msg.textContent = 'Loading hand tracking AI... 🤖';
+    initHands();
+    mpCamera = new Camera(video, {
+      onFrame: async () => { if (hands) await hands.send({image: video}); },
+      width: 1280, height: 720
+    });
+    await mpCamera.start();
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    msg.textContent = 'Almost ready... 🎹';
+    await new Promise(r => setTimeout(r, 1800));
+
+    document.getElementById('loading').style.display = 'none';
+    await showCountdown();
+    beginPlay();
+  } catch(err) {
+    console.error(err);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('permError').classList.add('show');
+  }
+}
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  initBgStars();
+  buildKeys();
+}
+
+function beginPlay() {
+  score = 0;
+  timeLeft = GAME_DURATION;
+  handLandmarks = [];
+  scorePops = [];
+  keyPressTimes = {};
+  activeNotes = [null, null];
+  keys.forEach(k => k.pressed = false);
+
+  document.getElementById('scoreVal').textContent = '0';
+  document.getElementById('gameover').classList.remove('show');
+
+  gameActive = true;
+  startTimer();
+  gameLoop();
+}
+
+function endGame() {
+  gameActive = false;
+  clearInterval(gameTimer);
+  cancelAnimationFrame(animFrame);
+
+  const msgs = ['Keep practicing! 🎹','Good start! 🎵','Nice playing! 🎶','Amazing musician! 🏆','Piano Master! 👑'];
+  const mIdx = score === 0 ? 0 : score < 10 ? 1 : score < 25 ? 2 : score < 50 ? 3 : 4;
+  const emojis = ['😊','🌟','🎉','🏆','👑'];
+
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('finalMsg').textContent = msgs[mIdx];
+  document.getElementById('goEmoji').textContent = emojis[mIdx];
+  document.getElementById('gameover').classList.add('show');
+}
+
+function restartGame() {
+  document.getElementById('gameover').classList.remove('show');
+  beginPlay();
+}
+
+function goHome() {
+  window.location.href = 'index.html';
+}
+
+function retryCamera() {
+  document.getElementById('permError').classList.remove('show');
+  document.getElementById('loading').style.display = 'flex';
+  setupCamera();
+}
+
+// Auto-start when page is fully loaded
+window.addEventListener('load', () => { setupCamera(); });
+</script>
+</body>
+</html>

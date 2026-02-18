@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>👻 Ghost Attack!</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;800&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root { --bg:#0a0e2e; --purple:#a855f7; }
+  body { font-family:'Baloo 2',cursive; background:var(--bg); overflow:hidden; height:100vh; width:100vw; user-select:none; }
+
+  #video {
+    position:fixed; inset:0; width:100%; height:100%;
+    object-fit:cover; transform:scaleX(-1); opacity:0; transition:opacity 1s;
+  }
+  #video.visible { opacity:1; }
+  #canvas { position:fixed; inset:0; width:100%; height:100%; }
+
+  /* HUD */
+  #hud {
+    position:fixed; top:0; left:0; right:0;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 20px;
+    background:linear-gradient(180deg,rgba(10,14,46,.88) 0%,transparent 100%);
+    z-index:10; pointer-events:none;
+  }
+  .hud-left { display:flex; align-items:center; gap:8px; }
+  .hud-left span { font-size:clamp(13px,2vw,18px); color:rgba(255,255,255,.7); font-weight:700; font-family:'Nunito',sans-serif; text-transform:uppercase; letter-spacing:1px; }
+  .survive-val { font-size:clamp(26px,5vw,44px)!important; font-weight:800!important; color:#FFD93D!important; text-shadow:0 0 18px rgba(255,217,61,.8); letter-spacing:-1px!important; font-family:'Baloo 2',cursive!important; }
+  .speed-badge { background:linear-gradient(135deg,#a855f7,#6366f1); color:white; padding:5px 16px; border-radius:28px; font-size:clamp(12px,1.8vw,15px); font-weight:800; box-shadow:0 4px 14px rgba(168,85,247,.5); }
+
+  /* Countdown */
+  #countdown {
+    display:none; position:fixed; inset:0; background:rgba(10,14,46,.7);
+    flex-direction:column; align-items:center; justify-content:center; z-index:25; backdrop-filter:blur(4px);
+  }
+  #countdown.show { display:flex; }
+  #countNum { font-size:clamp(100px,20vw,180px); font-weight:800; color:white; line-height:1; animation:countPop .5s cubic-bezier(.34,1.56,.64,1); text-shadow:0 0 60px rgba(168,85,247,.8); }
+  @keyframes countPop { from{transform:scale(2);opacity:0;} to{transform:scale(1);opacity:1;} }
+  #countdown p { font-family:'Nunito',sans-serif; font-size:clamp(16px,3vw,24px); color:rgba(255,255,255,.7); font-weight:700; margin-top:10px; }
+
+  /* Loading */
+  #loading { position:fixed; inset:0; background:rgba(10,14,46,.97); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; z-index:20; }
+  #loading h2 { color:white; font-size:clamp(22px,4vw,32px); font-weight:800; }
+  #loading p  { color:rgba(255,255,255,.6); font-family:'Nunito',sans-serif; font-size:clamp(13px,2vw,18px); font-weight:700; text-align:center; padding:0 20px; }
+  .spinner { width:56px; height:56px; border:4px solid rgba(168,85,247,.2); border-top-color:#a855f7; border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg);} }
+
+  /* Hit flash */
+  #hitFlash { position:fixed; inset:0; pointer-events:none; z-index:15; opacity:0; background:rgba(255,50,50,.55); }
+  #hitFlash.flash { animation:flashAnim .6s ease-out; }
+  @keyframes flashAnim { 0%{opacity:1;} 100%{opacity:0;} }
+
+  /* You're Out overlay */
+  #youreOut { display:none; position:fixed; inset:0; align-items:center; justify-content:center; z-index:28; pointer-events:none; }
+  #youreOut.show { display:flex; }
+  #youreOut span {
+    font-size:clamp(52px,11vw,110px); font-weight:800; color:white; text-align:center;
+    text-shadow:0 0 50px rgba(255,80,80,.95), 0 4px 20px rgba(0,0,0,.6);
+    animation:youreOutAnim 2s ease-out forwards;
+  }
+  @keyframes youreOutAnim {
+    0%   { opacity:0; transform:scale(0.15) rotate(-10deg); }
+    18%  { opacity:1; transform:scale(1.18) rotate(3deg); }
+    32%  { transform:scale(1) rotate(0deg); }
+    72%  { opacity:1; }
+    100% { opacity:0; transform:translateY(-30px) scale(0.9); }
+  }
+
+  /* Game Over */
+  #gameover { display:none; position:fixed; inset:0; background:rgba(10,14,46,.92); flex-direction:column; align-items:center; justify-content:center; z-index:30; gap:14px; backdrop-filter:blur(8px); }
+  #gameover.show { display:flex; }
+  @keyframes goBounce { 0%,100%{transform:translateY(0) rotate(-5deg);} 50%{transform:translateY(-18px) rotate(5deg);} }
+  #gameover .go-emoji { font-size:clamp(60px,10vw,90px); animation:goBounce 1.5s ease-in-out infinite; }
+  #gameover h2 { font-size:clamp(28px,5.5vw,56px); font-weight:800; background:linear-gradient(135deg,#c084fc,#818cf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .go-score-wrap { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.15); border-radius:22px; padding:18px 44px; text-align:center; }
+  .go-score-label { color:rgba(255,255,255,.5); font-family:'Nunito'; font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; }
+  .go-score-num   { font-size:clamp(44px,8vw,76px); font-weight:800; color:#c084fc; text-shadow:0 0 36px rgba(192,132,252,.6); line-height:1; }
+  .go-score-msg   { color:rgba(255,255,255,.5); font-family:'Nunito'; font-size:14px; font-weight:700; margin-top:4px; }
+  .go-buttons { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-top:6px; }
+  .go-btn { padding:14px 36px; border-radius:50px; border:none; font-family:'Baloo 2',cursive; font-size:clamp(15px,2.5vw,19px); font-weight:800; cursor:pointer; transition:transform .2s,box-shadow .2s; }
+  .go-btn:hover { transform:scale(1.06); } .go-btn:active { transform:scale(.96); }
+  .go-btn-play { background:linear-gradient(135deg,#a855f7,#6366f1); color:white; box-shadow:0 6px 28px rgba(168,85,247,.5); }
+  .go-btn-home { background:rgba(255,255,255,.1); color:white; border:1px solid rgba(255,255,255,.2); }
+
+  /* Back button */
+  #backBtn { position:fixed; top:12px; right:12px; padding:9px 18px; border-radius:40px; border:1px solid rgba(255,255,255,.2); background:rgba(0,0,0,.4); color:rgba(255,255,255,.6); font-family:'Baloo 2',cursive; font-size:13px; font-weight:700; cursor:pointer; z-index:10; transition:all .2s; }
+  #backBtn:hover { background:rgba(0,0,0,.7); color:white; }
+
+  /* Permission error */
+  #permError { display:none; position:fixed; inset:0; background:rgba(10,14,46,.97); flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:25; text-align:center; padding:28px; }
+  #permError.show { display:flex; }
+  #permError .pe-icon { font-size:56px; }
+  #permError h2 { color:white; font-size:clamp(20px,4vw,28px); font-weight:800; }
+  #permError p  { color:rgba(255,255,255,.6); font-family:'Nunito'; font-size:clamp(13px,2vw,16px); font-weight:700; max-width:400px; line-height:1.6; }
+  #permError button { padding:13px 34px; border-radius:40px; border:none; background:linear-gradient(135deg,#a855f7,#6366f1); color:white; font-family:'Baloo 2'; font-size:clamp(15px,2.5vw,18px); font-weight:800; cursor:pointer; margin-top:6px; }
+</style>
+</head>
+<body>
+
+<video id="video" playsinline autoplay muted></video>
+<canvas id="canvas"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-left">
+    <span>👻</span>
+    <span class="survive-val" id="surviveVal">0</span>
+    <span>sec</span>
+  </div>
+  <div><div class="speed-badge" id="speedBadge">Speed 1</div></div>
+</div>
+
+<button id="backBtn" onclick="goHome()">← Home</button>
+<div id="hitFlash"></div>
+<div id="youreOut"><span>You're Out! 💥</span></div>
+
+<!-- Countdown -->
+<div id="countdown">
+  <div id="countNum">3</div>
+  <p>Dodge the ghosts! 👻</p>
+</div>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <h2>👻 Getting Ready...</h2>
+  <p id="loadingMsg">Starting your webcam...</p>
+</div>
+
+<!-- Permission Error -->
+<div id="permError">
+  <div class="pe-icon">📷</div>
+  <h2>Camera Needed!</h2>
+  <p>We need your webcam to detect your face. Please allow camera access and try again!</p>
+  <button onclick="retryCamera()">Try Again 📷</button>
+</div>
+
+<!-- Game Over -->
+<div id="gameover">
+  <div class="go-emoji" id="goEmoji">👻</div>
+  <h2>Game Over!</h2>
+  <div class="go-score-wrap">
+    <div class="go-score-label">Seconds Survived</div>
+    <div class="go-score-num" id="finalScore">0</div>
+    <div class="go-score-msg" id="finalMsg"></div>
+  </div>
+  <div class="go-buttons">
+    <button class="go-btn go-btn-play" onclick="restartGame()">🔄 Play Again!</button>
+    <button class="go-btn go-btn-home" onclick="goHome()">🏠 Home</button>
+  </div>
+</div>
+
+<!-- MediaPipe Face Detection -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
+
+<script>
+// ════════════════════════════════════════════════════
+//  CONSTANTS
+// ════════════════════════════════════════════════════
+const GHOST_CONFIGS = [
+  { color:'#a5f3fc', glow:'rgba(165,243,252,0.45)', edge:'left'  },  // cyan
+  { color:'#f9a8d4', glow:'rgba(249,168,212,0.45)', edge:'right' },  // pink
+];
+
+// ════════════════════════════════════════════════════
+//  GHOST CLASS
+// ════════════════════════════════════════════════════
+class Ghost {
+  constructor(cfg) {
+    this.color = cfg.color;
+    this.glow  = cfg.glow;
+    this.size  = 55;
+    this.phase = Math.random() * Math.PI * 2;
+    this.vx = 0; this.vy = 0;
+    this.targetX = canvas.width / 2;
+    this.targetY = canvas.height / 2;
+    this.spawnAtEdge(cfg.edge);
+  }
+
+  spawnAtEdge(edge) {
+    const W = canvas.width, H = canvas.height;
+    if (edge === 'left')  { this.x = -this.size * 2; this.y = H * 0.2 + Math.random() * H * 0.6; }
+    if (edge === 'right') { this.x = W + this.size * 2; this.y = H * 0.2 + Math.random() * H * 0.6; }
+    if (edge === 'top')   { this.x = W * 0.2 + Math.random() * W * 0.6; this.y = -this.size * 2; }
+    if (edge === 'bottom'){ this.x = W * 0.2 + Math.random() * W * 0.6; this.y = H + this.size * 2; }
+  }
+
+  update(tx, ty, speed) {
+    this.phase += 0.045;
+    this.targetX = tx;
+    this.targetY = ty;
+
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const nx = dx / dist, ny = dy / dist;
+
+    // Chase + perpendicular sine wobble
+    const wobble = Math.sin(this.phase * 1.4) * 1.5;
+    this.vx += nx * 0.28 + (-ny) * wobble * 0.12;
+    this.vy += ny * 0.28 + ( nx) * wobble * 0.12;
+
+    // Clamp to speed
+    const spd = Math.hypot(this.vx, this.vy);
+    if (spd > speed) { this.vx = this.vx / spd * speed; this.vy = this.vy / spd * speed; }
+
+    this.x += this.vx;
+    this.y += this.vy;
+  }
+
+  hitsFace(face) {
+    if (!face) return false;
+    return Math.hypot(this.x - face.x, this.y - face.y) < this.size + face.r;
+  }
+
+  draw(ctx) {
+    const bobY = Math.sin(this.phase) * 8;
+    ctx.save();
+    ctx.translate(this.x, this.y + bobY);
+
+    const s = this.size;
+
+    // Radial glow
+    const gl = ctx.createRadialGradient(0, 0, s * 0.2, 0, 0, s * 2.2);
+    gl.addColorStop(0, this.glow);
+    gl.addColorStop(1, 'transparent');
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 2.2, 0, Math.PI * 2);
+    ctx.fillStyle = gl;
+    ctx.fill();
+
+    // Ghost body — dome top + wavy skirt
+    ctx.beginPath();
+    ctx.moveTo(-s, s * 0.45);
+    ctx.bezierCurveTo(-s, -s * 0.35, -s * 0.5, -s, 0, -s);
+    ctx.bezierCurveTo(s * 0.5, -s, s, -s * 0.35, s, s * 0.45);
+    // 3-bump wavy skirt
+    ctx.quadraticCurveTo( s * 0.78,  s * 0.92,  s * 0.5,  s * 0.55);
+    ctx.quadraticCurveTo( s * 0.22,  s * 0.18,  0,         s * 0.55);
+    ctx.quadraticCurveTo(-s * 0.22,  s * 0.92, -s * 0.5,  s * 0.55);
+    ctx.quadraticCurveTo(-s * 0.78,  s * 0.18, -s,         s * 0.45);
+    ctx.closePath();
+    ctx.fillStyle = this.color;
+    ctx.globalAlpha = 0.9;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Eyes — track toward face target
+    const lookAngle = Math.atan2(this.targetY - (this.y + bobY), this.targetX - this.x);
+    const lx = Math.cos(lookAngle) * s * 0.1;
+    const ly = Math.sin(lookAngle) * s * 0.1;
+
+    // Left eye
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.3, -s * 0.05, s * 0.2, s * 0.25, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'white'; ctx.fill();
+    ctx.beginPath();
+    ctx.arc(-s * 0.3 + lx, -s * 0.05 + ly, s * 0.11, 0, Math.PI * 2);
+    ctx.fillStyle = '#0a0e2e'; ctx.fill();
+    ctx.beginPath();
+    ctx.arc(-s * 0.34 + lx * 0.4, -s * 0.12 + ly * 0.4, s * 0.04, 0, Math.PI * 2);
+    ctx.fillStyle = 'white'; ctx.fill();
+
+    // Right eye
+    ctx.beginPath();
+    ctx.ellipse(s * 0.3, -s * 0.05, s * 0.2, s * 0.25, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'white'; ctx.fill();
+    ctx.beginPath();
+    ctx.arc(s * 0.3 + lx, -s * 0.05 + ly, s * 0.11, 0, Math.PI * 2);
+    ctx.fillStyle = '#0a0e2e'; ctx.fill();
+    ctx.beginPath();
+    ctx.arc(s * 0.26 + lx * 0.4, -s * 0.12 + ly * 0.4, s * 0.04, 0, Math.PI * 2);
+    ctx.fillStyle = 'white'; ctx.fill();
+
+    // Mouth — open O (chasing expression)
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.22, s * 0.14, s * 0.11, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#0a0e2e'; ctx.fill();
+
+    ctx.restore();
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  BLAST PARTICLE
+// ════════════════════════════════════════════════════
+class BlastParticle {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.vx = (Math.random() - 0.5) * 22;
+    this.vy = (Math.random() - 0.5) * 22 - 4;
+    const cols = ['#ff4d4d','#ff9a3c','#FFD93D','#c084fc','#f9a8d4','#ff6b9d'];
+    this.color = cols[Math.floor(Math.random() * cols.length)];
+    this.size  = 4 + Math.random() * 14;
+    this.alpha = 1;
+    this.isEmoji = Math.random() < 0.35;
+    this.emoji = ['💥','⭐','✨','💫','👻'][Math.floor(Math.random() * 5)];
+    this.rot = Math.random() * Math.PI * 2;
+    this.rotV = (Math.random() - 0.5) * 0.3;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    this.vy += 0.35; this.alpha -= 0.022;
+    this.rot += this.rotV; this.vx *= 0.97;
+  }
+  draw(ctx) {
+    if (this.alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, this.alpha);
+    ctx.translate(this.x, this.y); ctx.rotate(this.rot);
+    if (this.isEmoji) {
+      ctx.font = `${this.size * 3}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(this.emoji, 0, 0);
+    } else {
+      ctx.beginPath(); ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+      ctx.fillStyle = this.color; ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════
+let facePos = null;        // {x, y, r} or null
+let ghosts = [];
+let blastParticles = [];
+let bgStars = [];
+let survivedSeconds = 0;
+let gameActive = false;
+let hitOccurred = false;
+let surviveTimer = null;
+let animFrame = null;
+let globalPhase = 0;       // for face-ring pulse
+let faceDetector = null, mpCamera = null;
+
+const video  = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+
+// ════════════════════════════════════════════════════
+//  FACE DETECTION CALLBACK
+// ════════════════════════════════════════════════════
+function onFaceResults(results) {
+  if (!results.detections || results.detections.length === 0) {
+    facePos = null;
+    return;
+  }
+  const det = results.detections[0];
+  const W = canvas.width, H = canvas.height;
+
+  // Use eye landmarks for precise targeting (landmarks[0]=right eye, landmarks[1]=left eye)
+  // Fall back to bounding box center if landmarks unavailable
+  let ex, ey;
+  if (det.landmarks && det.landmarks.length >= 2) {
+    const re = det.landmarks[0]; // right eye (normalized)
+    const le = det.landmarks[1]; // left eye (normalized)
+    ex = (1 - (re.x + le.x) / 2) * W;  // mirror x
+    ey = ((re.y + le.y) / 2) * H;
+  } else {
+    const bb = det.boundingBox;
+    ex = (1 - bb.xCenter) * W;
+    ey = bb.yCenter * H;
+  }
+
+  const bb = det.boundingBox;
+  facePos = { x: ex, y: ey, r: bb.width * W * 0.38 };
+}
+
+function initFaceDetection() {
+  faceDetector = new FaceDetection({
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${f}`
+  });
+  faceDetector.setOptions({ model:'short', minDetectionConfidence:0.6 });
+  faceDetector.onResults(onFaceResults);
+}
+
+// ════════════════════════════════════════════════════
+//  BACKGROUND STARS
+// ════════════════════════════════════════════════════
+function initBgStars() {
+  bgStars = [];
+  for (let i = 0; i < 45; i++) {
+    bgStars.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      r: Math.random() * 2 + 0.4,
+      a: Math.random(),
+      s: Math.random() * 0.012 + 0.004
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  GHOST SPEED
+// ════════════════════════════════════════════════════
+function getGhostSpeed() {
+  const level = Math.floor(survivedSeconds / 8);
+  return Math.min(5.5, 2.5 + level * 0.35);
+}
+
+function getSpeedLabel() {
+  const level = Math.floor(survivedSeconds / 8) + 1;
+  return `Speed ${Math.min(level, 7)}`;
+}
+
+// ════════════════════════════════════════════════════
+//  HIT HANDLER
+// ════════════════════════════════════════════════════
+function handleHit() {
+  if (hitOccurred) return;
+  hitOccurred = true;
+  gameActive = false;
+  clearInterval(surviveTimer);
+
+  // Spawn blast particles at face position
+  const bx = facePos ? facePos.x : canvas.width / 2;
+  const by = facePos ? facePos.y : canvas.height / 2;
+  for (let i = 0; i < 55; i++) blastParticles.push(new BlastParticle(bx, by));
+
+  // Red screen flash
+  const flash = document.getElementById('hitFlash');
+  flash.classList.remove('flash');
+  requestAnimationFrame(() => flash.classList.add('flash'));
+  flash.addEventListener('animationend', () => flash.classList.remove('flash'), {once:true});
+
+  // "You're Out!" overlay
+  const youreOut = document.getElementById('youreOut');
+  youreOut.classList.add('show');
+  setTimeout(() => youreOut.classList.remove('show'), 2000);
+
+  // Show game over after blast animation
+  setTimeout(() => {
+    cancelAnimationFrame(animFrame);
+    showGameOver();
+  }, 2000);
+}
+
+function showGameOver() {
+  const msgs = [
+    '👻 Caught so fast!',
+    '⭐ Good dodge!',
+    '🎉 Nice moves!',
+    '🏆 Superstar dodger!',
+    '👑 Ghost Champion!'
+  ];
+  const emojis = ['😱','⭐','🎉','🏆','👑'];
+  const mIdx = survivedSeconds < 5 ? 0 : survivedSeconds < 15 ? 1 : survivedSeconds < 30 ? 2 : survivedSeconds < 60 ? 3 : 4;
+
+  document.getElementById('finalScore').textContent = survivedSeconds;
+  document.getElementById('finalMsg').textContent = msgs[mIdx];
+  document.getElementById('goEmoji').textContent = emojis[mIdx];
+  document.getElementById('gameover').classList.add('show');
+}
+
+// ════════════════════════════════════════════════════
+//  FACE INDICATOR
+// ════════════════════════════════════════════════════
+function drawFaceRing(face) {
+  const pulse = 1 + Math.sin(globalPhase * 3) * 0.06;
+  const r = face.r * pulse + 14;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(face.x, face.y, r, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255,220,60,${0.5 + Math.sin(globalPhase * 3) * 0.2})`;
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 5]);
+  ctx.lineDashOffset = -globalPhase * 30;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// ════════════════════════════════════════════════════
+//  MAIN LOOP
+// ════════════════════════════════════════════════════
+function gameLoop() {
+  animFrame = requestAnimationFrame(gameLoop);
+  globalPhase += 0.018;
+  const W = canvas.width, H = canvas.height;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Dark overlay on video
+  ctx.fillStyle = 'rgba(10,14,46,0.2)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  bgStars.forEach(s => {
+    s.a += s.s * (Math.random() > 0.5 ? 1 : -1);
+    s.a = Math.max(0.04, Math.min(0.75, s.a));
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${s.a})`;
+    ctx.fill();
+  });
+
+  // Determine effective target for ghosts
+  const target = facePos || {x: W / 2, y: H / 2};
+  const speed  = facePos ? getGhostSpeed() : getGhostSpeed() * 0.3;
+
+  // Face ring
+  if (facePos) drawFaceRing(facePos);
+
+  // Ghosts
+  if (!hitOccurred) {
+    ghosts.forEach(g => {
+      g.update(target.x, target.y, speed);
+      if (gameActive && facePos && g.hitsFace(facePos)) handleHit();
+    });
+    // Update speed badge
+    document.getElementById('speedBadge').textContent = getSpeedLabel();
+  }
+  ghosts.forEach(g => g.draw(ctx));
+
+  // Blast particles (keep running post-hit for animation)
+  blastParticles.forEach(p => { p.update(); p.draw(ctx); });
+  blastParticles = blastParticles.filter(p => p.alpha > 0);
+
+}
+
+function clamp(min, val, max) { return Math.max(min, Math.min(max, val)); }
+
+// ════════════════════════════════════════════════════
+//  COUNTDOWN
+// ════════════════════════════════════════════════════
+function showCountdown() {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('countdown');
+    const num = document.getElementById('countNum');
+    overlay.classList.add('show');
+    let count = 3;
+    num.textContent = count;
+    const tick = () => {
+      count--;
+      if (count <= 0) {
+        num.textContent = 'GO! 👻';
+        setTimeout(() => { overlay.classList.remove('show'); resolve(); }, 700);
+      } else {
+        num.textContent = count;
+        num.style.animation = 'none';
+        requestAnimationFrame(() => requestAnimationFrame(() =>
+          num.style.animation = 'countPop .5s cubic-bezier(.34,1.56,.64,1)'
+        ));
+        setTimeout(tick, 1000);
+      }
+    };
+    num.style.animation = 'none';
+    requestAnimationFrame(() => requestAnimationFrame(() =>
+      num.style.animation = 'countPop .5s cubic-bezier(.34,1.56,.64,1)'
+    ));
+    setTimeout(tick, 1000);
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  GAME FLOW
+// ════════════════════════════════════════════════════
+async function setupCamera() {
+  const msg = document.getElementById('loadingMsg');
+  try {
+    msg.textContent = 'Starting your webcam...';
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {width:1280, height:720, facingMode:'user'}, audio:false
+    });
+    video.srcObject = stream;
+    await new Promise(r => { video.onloadedmetadata = r; });
+    await video.play();
+    video.classList.add('visible');
+
+    msg.textContent = 'Loading face tracking AI... 🤖';
+    initFaceDetection();
+    mpCamera = new Camera(video, {
+      onFrame: async () => { if (faceDetector) await faceDetector.send({image: video}); },
+      width: 1280, height: 720
+    });
+    await mpCamera.start();
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    msg.textContent = 'Almost ready... 👻';
+    await new Promise(r => setTimeout(r, 1800));
+
+    document.getElementById('loading').style.display = 'none';
+    await showCountdown();
+    beginPlay();
+  } catch(err) {
+    console.error(err);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('permError').classList.add('show');
+  }
+}
+
+function resizeCanvas() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  initBgStars();
+}
+
+function beginPlay() {
+  survivedSeconds = 0;
+  gameActive = true;
+  hitOccurred = false;
+  blastParticles = [];
+  facePos = null;
+
+  document.getElementById('surviveVal').textContent = '0';
+  document.getElementById('speedBadge').textContent = 'Speed 1';
+  document.getElementById('gameover').classList.remove('show');
+
+  // Spawn 2 ghosts from 2 randomly chosen different edges
+  const edges = ['left', 'right', 'top', 'bottom'];
+  const shuffled = edges.sort(() => Math.random() - 0.5);
+  ghosts = [
+    new Ghost({ ...GHOST_CONFIGS[0], edge: shuffled[0] }),
+    new Ghost({ ...GHOST_CONFIGS[1], edge: shuffled[1] }),
+  ];
+
+  // Survival timer counting up
+  clearInterval(surviveTimer);
+  surviveTimer = setInterval(() => {
+    survivedSeconds++;
+    document.getElementById('surviveVal').textContent = survivedSeconds;
+  }, 1000);
+
+  gameLoop();
+}
+
+function restartGame() {
+  document.getElementById('gameover').classList.remove('show');
+  cancelAnimationFrame(animFrame);
+  beginPlay();
+}
+
+function goHome() {
+  clearInterval(surviveTimer);
+  cancelAnimationFrame(animFrame);
+  window.location.href = 'index.html';
+}
+
+function retryCamera() {
+  document.getElementById('permError').classList.remove('show');
+  document.getElementById('loading').style.display = 'flex';
+  setupCamera();
+}
+
+// Auto-start when page and MediaPipe scripts are fully loaded
+window.addEventListener('load', () => { setupCamera(); });
+</script>
+</body>
+</html>
