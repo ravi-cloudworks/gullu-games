@@ -360,8 +360,8 @@ const ctx    = canvas.getContext('2d');
 //  POSE CALLBACK
 // ════════════════════════════════════════════════════
 function onPoseResults(results) {
-  if (!gameActive || hitOccurred) return;
   if (!results.poseLandmarks) { poseKeypoints = []; return; }
+  if (hitOccurred) return;
   const W = canvas.width, H = canvas.height;
   poseKeypoints = results.poseLandmarks.map(lm => ({
     x:  (1 - lm.x) * W,
@@ -495,7 +495,7 @@ function drawAvatar() {
   const bboxH = Math.max(0.15, maxYn - minYn);
 
   const avatarH    = GEO.H * 0.30;
-  const scale      = Math.min(avatarH / bboxH, GEO.W * 0.008);
+  const scale      = avatarH / bboxH;
   const avatarBotY = GEO.botY + jumpOffset;
   const centerX    = laneCX(laneSmooth);
   const centerXn   = (minXn + maxXn) / 2;
