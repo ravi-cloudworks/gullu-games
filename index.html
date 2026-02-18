@@ -81,6 +81,14 @@
   .wc-ghost .wc-btn { background:linear-gradient(135deg,#a855f7,#6366f1); color:white; box-shadow:0 4px 18px rgba(168,85,247,.5); }
   .w-card:nth-child(3) .wc-icon { animation-delay:2s; }
   .wc-butterfly .wc-title { color:#e0b4ff; } .wc-piano .wc-title { color:#a3f5c5; } .wc-ghost .wc-title { color:#e9d5ff; }
+  .wc-temple { background:linear-gradient(145deg,#1a0800,#2d1200,#1a0500); box-shadow:0 18px 50px rgba(255,100,0,.35),0 0 0 1px rgba(255,100,0,.2); }
+  .wc-temple::before { background:#ff4500; }
+  .wc-temple:hover { box-shadow:0 28px 70px rgba(255,100,0,.55),0 0 0 2px rgba(255,100,0,.5); }
+  .wc-temple .wc-badge { background:rgba(255,100,0,.12); color:#fed7aa; border:1px solid rgba(255,100,0,.3); }
+  .wc-temple .wc-title { color:#fed7aa; }
+  .wc-temple .wc-btn { background:linear-gradient(135deg,#ff4500,#ff8c00); color:white; box-shadow:0 4px 18px rgba(255,69,0,.5); }
+  .w-card:nth-child(4){ animation-delay:.6s; }
+  .w-card:nth-child(4) .wc-icon { animation-delay:3s; }
   .wc-desc { font-family:'Nunito',sans-serif; font-size:clamp(11px,1.6vw,13px); color:rgba(255,255,255,.6); position:relative; z-index:1; line-height:1.5; font-weight:700; margin-bottom:16px; }
   .wc-btn {
     display:inline-flex; align-items:center; gap:7px; padding:9px 22px; border-radius:50px;
@@ -111,7 +119,7 @@
   <div class="w-floaters-wrap" id="wFloaters"></div>
 
   <div class="w-emoji">🌈</div>
-  <h1>Gullu Play Zone</h1>
+  <h1>Gullu Game Zone</h1>
   <p class="tagline">✨ Pick your adventure ✨</p>
 
   <div class="w-cards">
@@ -137,6 +145,14 @@
       <span class="wc-icon">👻</span>
       <div class="wc-title">Ghost<br>Attack!</div>
       <div class="wc-desc">Move your face to dodge chasing ghosts!<br>How long can you survive? 👻</div>
+      <button class="wc-btn">▶ Play Now!</button>
+    </div>
+    <!-- Temple Run -->
+    <div class="w-card wc-temple" onclick="onCardClick('temple',event)">
+      <div class="wc-badge">🟢 Ready to Play</div>
+      <span class="wc-icon">🏃</span>
+      <div class="wc-title">Temple<br>Run!</div>
+      <div class="wc-desc">Lean your body to dodge obstacles &amp;<br>raise both hands to jump! 🔥</div>
       <button class="wc-btn">▶ Play Now!</button>
     </div>
   </div>
@@ -181,6 +197,7 @@ function onCardClick(game, e){
   if(game==='butterfly') setTimeout(()=>{ window.location.href='butterfly.html'; },300);
   if(game==='piano')     setTimeout(()=>{ window.location.href='piano.html'; },300);
   if(game==='ghost')     setTimeout(()=>{ window.location.href='ghost.html'; },300);
+  if(game==='temple')   setTimeout(()=>{ window.location.href='temple.html'; },300);
 }
 
 document.querySelectorAll('.w-card').forEach(card=>{

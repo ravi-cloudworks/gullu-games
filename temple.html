@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏃 Temple Run!</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;800&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Baloo 2',cursive; background:#0a0a1a; overflow:hidden; height:100vh; width:100vw; user-select:none; }
+  #canvas { position:fixed; inset:0; width:100%; height:100%; }
+
+  /* HUD */
+  #hud {
+    position:fixed; top:0; left:0; right:0;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 20px;
+    background:linear-gradient(180deg,rgba(10,10,26,.9) 0%,transparent 100%);
+    z-index:10; pointer-events:none;
+  }
+  .hud-left { display:flex; align-items:center; gap:8px; }
+  .hud-left span { font-size:clamp(13px,2vw,18px); color:rgba(255,255,255,.7); font-weight:700; font-family:'Nunito',sans-serif; text-transform:uppercase; letter-spacing:1px; }
+  .dist-val { font-size:clamp(26px,5vw,44px)!important; font-weight:800!important; color:#FFD93D!important; text-shadow:0 0 18px rgba(255,217,61,.8); letter-spacing:-1px!important; font-family:'Baloo 2',cursive!important; }
+  .speed-badge { background:linear-gradient(135deg,#ff4500,#ff8c00); color:white; padding:5px 16px; border-radius:28px; font-size:clamp(12px,1.8vw,15px); font-weight:800; box-shadow:0 4px 14px rgba(255,69,0,.5); }
+
+  /* Countdown */
+  #countdown { display:none; position:fixed; inset:0; background:rgba(10,10,26,.75); flex-direction:column; align-items:center; justify-content:center; z-index:25; backdrop-filter:blur(4px); }
+  #countdown.show { display:flex; }
+  #countNum { font-size:clamp(100px,20vw,180px); font-weight:800; color:white; line-height:1; animation:countPop .5s cubic-bezier(.34,1.56,.64,1); text-shadow:0 0 60px rgba(255,100,0,.9); }
+  @keyframes countPop { from{transform:scale(2);opacity:0;} to{transform:scale(1);opacity:1;} }
+  #countdown p { font-family:'Nunito',sans-serif; font-size:clamp(14px,2.5vw,22px); color:rgba(255,255,255,.7); font-weight:700; margin-top:10px; text-align:center; padding:0 20px; }
+
+  /* Loading */
+  #loading { position:fixed; inset:0; background:rgba(10,10,26,.97); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; z-index:20; }
+  #loading h2 { color:white; font-size:clamp(22px,4vw,32px); font-weight:800; }
+  #loading p  { color:rgba(255,255,255,.6); font-family:'Nunito',sans-serif; font-size:clamp(13px,2vw,18px); font-weight:700; text-align:center; padding:0 20px; }
+  .spinner { width:56px; height:56px; border:4px solid rgba(255,100,0,.2); border-top-color:#ff4500; border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg);} }
+
+  /* Hit flash */
+  #hitFlash { position:fixed; inset:0; pointer-events:none; z-index:15; opacity:0; background:rgba(255,50,0,.6); }
+  #hitFlash.flash { animation:flashAnim .65s ease-out; }
+  @keyframes flashAnim { 0%{opacity:1;} 100%{opacity:0;} }
+
+  /* You're Out */
+  #youreOut { display:none; position:fixed; inset:0; align-items:center; justify-content:center; z-index:28; pointer-events:none; }
+  #youreOut.show { display:flex; }
+  #youreOut span { font-size:clamp(52px,11vw,110px); font-weight:800; color:white; text-align:center; text-shadow:0 0 50px rgba(255,80,0,.95), 0 4px 20px rgba(0,0,0,.6); animation:youreOutAnim 2s ease-out forwards; }
+  @keyframes youreOutAnim {
+    0%   { opacity:0; transform:scale(0.15) rotate(-10deg); }
+    18%  { opacity:1; transform:scale(1.18) rotate(3deg); }
+    32%  { transform:scale(1) rotate(0deg); }
+    72%  { opacity:1; }
+    100% { opacity:0; transform:translateY(-30px) scale(0.9); }
+  }
+
+  /* Game Over */
+  #gameover { display:none; position:fixed; inset:0; background:rgba(10,10,26,.92); flex-direction:column; align-items:center; justify-content:center; z-index:30; gap:14px; backdrop-filter:blur(8px); }
+  #gameover.show { display:flex; }
+  @keyframes goBounce { 0%,100%{transform:translateY(0) rotate(-5deg);} 50%{transform:translateY(-18px) rotate(5deg);} }
+  #gameover .go-emoji { font-size:clamp(60px,10vw,90px); animation:goBounce 1.5s ease-in-out infinite; }
+  #gameover h2 { font-size:clamp(28px,5.5vw,56px); font-weight:800; background:linear-gradient(135deg,#ff8c00,#ffd700); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .go-score-wrap { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.15); border-radius:22px; padding:18px 44px; text-align:center; }
+  .go-score-label { color:rgba(255,255,255,.5); font-family:'Nunito'; font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; }
+  .go-score-num   { font-size:clamp(44px,8vw,76px); font-weight:800; color:#ff8c00; text-shadow:0 0 36px rgba(255,140,0,.6); line-height:1; }
+  .go-score-msg   { color:rgba(255,255,255,.5); font-family:'Nunito'; font-size:14px; font-weight:700; margin-top:4px; }
+  .go-buttons { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-top:6px; }
+  .go-btn { padding:14px 36px; border-radius:50px; border:none; font-family:'Baloo 2',cursive; font-size:clamp(15px,2.5vw,19px); font-weight:800; cursor:pointer; transition:transform .2s; }
+  .go-btn:hover { transform:scale(1.06); } .go-btn:active { transform:scale(.96); }
+  .go-btn-play { background:linear-gradient(135deg,#ff4500,#ff8c00); color:white; box-shadow:0 6px 28px rgba(255,69,0,.5); }
+  .go-btn-home { background:rgba(255,255,255,.1); color:white; border:1px solid rgba(255,255,255,.2); }
+
+  /* Tip bar */
+  #tipBar { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.12); border-radius:40px; padding:7px 22px; font-family:'Nunito',sans-serif; font-size:clamp(11px,1.8vw,14px); color:rgba(255,255,255,.55); font-weight:700; z-index:10; pointer-events:none; white-space:nowrap; }
+
+  /* Back button */
+  #backBtn { position:fixed; top:12px; right:12px; padding:9px 18px; border-radius:40px; border:1px solid rgba(255,255,255,.2); background:rgba(0,0,0,.4); color:rgba(255,255,255,.6); font-family:'Baloo 2',cursive; font-size:13px; font-weight:700; cursor:pointer; z-index:10; transition:all .2s; }
+  #backBtn:hover { background:rgba(0,0,0,.7); color:white; }
+
+  /* Permission error */
+  #permError { display:none; position:fixed; inset:0; background:rgba(10,10,26,.97); flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:25; text-align:center; padding:28px; }
+  #permError.show { display:flex; }
+  #permError .pe-icon { font-size:56px; }
+  #permError h2 { color:white; font-size:clamp(20px,4vw,28px); font-weight:800; }
+  #permError p  { color:rgba(255,255,255,.6); font-family:'Nunito'; font-size:clamp(13px,2vw,16px); font-weight:700; max-width:400px; line-height:1.6; }
+  #permError button { padding:13px 34px; border-radius:40px; border:none; background:linear-gradient(135deg,#ff4500,#ff8c00); color:white; font-family:'Baloo 2'; font-size:clamp(15px,2.5vw,18px); font-weight:800; cursor:pointer; margin-top:6px; }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+<video id="video" style="display:none" playsinline autoplay muted></video>
+
+<div id="hud">
+  <div class="hud-left">
+    <span>🏃</span>
+    <span class="dist-val" id="distVal">0</span>
+    <span>m</span>
+  </div>
+  <div><div class="speed-badge" id="speedBadge">Speed 1</div></div>
+</div>
+
+<button id="backBtn" onclick="goHome()">← Home</button>
+<div id="hitFlash"></div>
+<div id="youreOut"><span>💥 BOOM!</span></div>
+
+<div id="countdown">
+  <div id="countNum">3</div>
+  <p>🧍 Stand back! Lean left/right to dodge<br>🙌 Raise both hands to jump!</p>
+</div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <h2>🏃 Getting Ready...</h2>
+  <p id="loadingMsg">Starting your webcam...</p>
+</div>
+
+<div id="permError">
+  <div class="pe-icon">📷</div>
+  <h2>Camera Needed!</h2>
+  <p>We need your webcam to track your body. Please allow camera access and try again!</p>
+  <button onclick="retryCamera()">Try Again 📷</button>
+</div>
+
+<div id="gameover">
+  <div class="go-emoji" id="goEmoji">🔥</div>
+  <h2>Burned! 🔥</h2>
+  <div class="go-score-wrap">
+    <div class="go-score-label">Distance Survived</div>
+    <div class="go-score-num" id="finalScore">0</div>
+    <div class="go-score-msg" id="finalMsg"></div>
+  </div>
+  <div class="go-buttons">
+    <button class="go-btn go-btn-play" onclick="restartGame()">🔄 Run Again!</button>
+    <button class="go-btn go-btn-home" onclick="goHome()">🏠 Home</button>
+  </div>
+</div>
+
+<div id="tipBar">🏃 Lean left/right to dodge &nbsp;•&nbsp; 🙌 Raise both hands to jump!</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+<script>
+// ════════════════════════════════════════════════════
+//  GEOMETRY
+// ════════════════════════════════════════════════════
+let GEO = {};
+function computeGeo() {
+  const W = canvas.width, H = canvas.height;
+  GEO.W = W; GEO.H = H;
+  GEO.vpX    = W * 0.5;
+  GEO.vpY    = H * 0.28;
+  GEO.botY   = H * 0.84;
+  GEO.leftX  = W * 0.06;
+  GEO.rightX = W * 0.94;
+  const tw   = GEO.rightX - GEO.leftX;
+  GEO.rails  = [GEO.leftX, GEO.leftX + tw/3, GEO.leftX + tw*2/3, GEO.rightX];
+  GEO.laneC  = [GEO.leftX + tw/6, GEO.leftX + tw/2, GEO.leftX + tw*5/6];
+  GEO.tw     = tw;
+}
+// Perspective helpers
+function pX(bx, z) { return GEO.vpX + (bx - GEO.vpX) * z; }
+function pY(z)     { return GEO.vpY + (GEO.botY - GEO.vpY) * z; }
+function pS(z)     { return z * 0.88 + 0.12; }
+
+// Smooth lane center X from laneSmooth (0–2 float)
+function laneCX(ls) {
+  const t = Math.max(0, Math.min(2, ls));
+  if (t <= 1) return GEO.laneC[0] + (GEO.laneC[1] - GEO.laneC[0]) * t;
+  return GEO.laneC[1] + (GEO.laneC[2] - GEO.laneC[1]) * (t - 1);
+}
+
+// ════════════════════════════════════════════════════
+//  OBSTACLE
+// ════════════════════════════════════════════════════
+const OBS_POOL = ['rock','rock','fireball','rock','fireball','wall'];
+class Obstacle {
+  constructor() {
+    this.type = OBS_POOL[Math.floor(Math.random() * OBS_POOL.length)];
+    if (this.type === 'wall') {
+      this.openLane = Math.floor(Math.random() * 3);
+    } else {
+      this.lane = Math.floor(Math.random() * 3);
+    }
+    this.z = 0.04;
+    this.phase = Math.random() * Math.PI * 2;
+    this.checked = false;
+  }
+  update(spd) { this.z += spd; this.phase += 0.1; return this.z < 1.1; }
+  getCollisionLanes() {
+    if (this.type === 'wall') return [0,1,2].filter(l => l !== this.openLane);
+    return [this.lane];
+  }
+  draw(ctx) {
+    const z = this.z;
+    if (z < 0.05 || z > 1.05) return;
+    const s  = pS(z);
+    const cy = pY(z);
+
+    if (this.type === 'wall') {
+      [0,1,2].forEach(l => {
+        if (l === this.openLane) return;
+        const cx  = pX(GEO.laneC[l], z);
+        const lw  = (GEO.tw / 3) * s * 0.88;
+        const h   = 72 * s;
+        const alp = Math.min(1, z * 1.8);
+        ctx.save();
+        // Body
+        const gr = ctx.createLinearGradient(cx, cy - h, cx, cy);
+        gr.addColorStop(0, `rgba(255,90,0,${alp})`);
+        gr.addColorStop(1, `rgba(180,40,0,${alp})`);
+        ctx.fillStyle = gr;
+        ctx.fillRect(cx - lw/2, cy - h, lw, h);
+        // Warning stripe
+        ctx.strokeStyle = `rgba(255,220,0,${alp * 0.7})`;
+        ctx.lineWidth = 3 * s;
+        ctx.setLineDash([9*s, 5*s]);
+        ctx.beginPath(); ctx.moveTo(cx - lw/2 + 5*s, cy - h*0.5); ctx.lineTo(cx + lw/2 - 5*s, cy - h*0.5); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      });
+      // Hint on open lane
+      const ox = pX(GEO.laneC[this.openLane], z);
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, z * 2) * 0.85;
+      ctx.font = `${28 * s}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('✅', ox, cy - 18 * s);
+      ctx.restore();
+      return;
+    }
+
+    const cx = pX(GEO.laneC[this.lane], z);
+    if (this.type === 'rock') {
+      const r = 30 * s;
+      ctx.save();
+      const g = ctx.createRadialGradient(cx - r*.3, cy - r*.4, r*.1, cx, cy, r);
+      g.addColorStop(0, '#c0b0a0'); g.addColorStop(.5, '#887060'); g.addColorStop(1, '#504540');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.ellipse(cx, cy, r*1.2, r, 0, 0, Math.PI*2); ctx.fill();
+      // Cracks
+      ctx.strokeStyle = 'rgba(40,28,20,.5)'; ctx.lineWidth = 1.5*s;
+      ctx.beginPath(); ctx.moveTo(cx-r*.3, cy-r*.2); ctx.lineTo(cx, cy+r*.1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx+r*.2, cy-r*.3); ctx.lineTo(cx+r*.5, cy+r*.1); ctx.stroke();
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,.3)';
+      ctx.beginPath(); ctx.ellipse(cx, cy+r*.25, r*1.1, r*.28, 0, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+
+    if (this.type === 'fireball') {
+      const r = 24 * s;
+      const fl = 1 + Math.sin(this.phase) * 0.15;
+      ctx.save();
+      // Outer glow
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.8 * fl);
+      glow.addColorStop(0, `rgba(255,190,0,${Math.min(1,z*2)*.55})`);
+      glow.addColorStop(.5, `rgba(255,70,0,${Math.min(1,z*2)*.25})`);
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, cy, r*2.8*fl, 0, Math.PI*2); ctx.fill();
+      // Core
+      const core = ctx.createRadialGradient(cx, cy-r*.2, 0, cx, cy, r*fl);
+      core.addColorStop(0, '#fffac0'); core.addColorStop(.3, '#ffcc00');
+      core.addColorStop(.65, '#ff5500'); core.addColorStop(1, '#aa2200');
+      ctx.fillStyle = core; ctx.beginPath(); ctx.arc(cx, cy, r*fl, 0, Math.PI*2); ctx.fill();
+      // Tendrils
+      for (let i = 0; i < 5; i++) {
+        const a = (i/5)*Math.PI*2 + this.phase;
+        const fx = cx + Math.cos(a)*r*1.3, fy = cy + Math.sin(a)*r*.7 - r*.4;
+        ctx.fillStyle = 'rgba(255,110,0,.6)';
+        ctx.beginPath(); ctx.ellipse(fx, fy, r*.22, r*.38, a, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  LAVA PARTICLE
+// ════════════════════════════════════════════════════
+class LavaParticle {
+  constructor(side) { this.side = side; this._reset(); }
+  _reset() {
+    const lw = GEO.leftX || window.innerWidth * 0.06;
+    if (this.side === 'L') this.x = Math.random() * lw * 2.5;
+    else                   this.x = (GEO.W || window.innerWidth) - Math.random() * lw * 2.5;
+    this.y  = (GEO.botY || window.innerHeight * .84) + Math.random() * (GEO.H || window.innerHeight) * 0.18;
+    this.vy = -(2.5 + Math.random() * 5.5);
+    this.vx = (Math.random() - 0.5) * 2.2;
+    this.alpha = 0.75 + Math.random() * 0.25;
+    this.size  = 4 + Math.random() * 10;
+    const t = Math.random();
+    this.color = t < 0.35 ? '#ff2200' : t < 0.68 ? '#ff7700' : '#ffcc00';
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    this.vy -= 0.04; this.alpha -= 0.02; this.size *= 0.985;
+    if (this.alpha <= 0 || this.y < GEO.vpY) this._reset();
+  }
+  draw(ctx) {
+    if (this.alpha <= 0) return;
+    ctx.save(); ctx.globalAlpha = this.alpha;
+    ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+    ctx.fillStyle = this.color; ctx.fill(); ctx.restore();
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  BLAST PARTICLE
+// ════════════════════════════════════════════════════
+class BlastParticle {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.vx = (Math.random()-.5)*22; this.vy = (Math.random()-.5)*22 - 4;
+    const cols = ['#ff4500','#ff8c00','#FFD93D','#ff6b9d','#ffffff'];
+    this.color = cols[Math.floor(Math.random()*cols.length)];
+    this.size = 4 + Math.random()*14; this.alpha = 1;
+    this.isEmoji = Math.random() < 0.3;
+    this.emoji = ['💥','🔥','⭐','✨'][Math.floor(Math.random()*4)];
+    this.rot = Math.random()*Math.PI*2; this.rotV = (Math.random()-.5)*.3;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    this.vy += 0.35; this.alpha -= 0.022; this.rot += this.rotV; this.vx *= 0.97;
+  }
+  draw(ctx) {
+    if (this.alpha <= 0) return;
+    ctx.save(); ctx.globalAlpha = Math.max(0, this.alpha);
+    ctx.translate(this.x, this.y); ctx.rotate(this.rot);
+    if (this.isEmoji) {
+      ctx.font = `${this.size*3}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(this.emoji, 0, 0);
+    } else {
+      ctx.beginPath(); ctx.arc(0, 0, this.size, 0, Math.PI*2);
+      ctx.fillStyle = this.color; ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════
+let obstacles = [], lavaParticles = [], blastParticles = [];
+let poseKeypoints = [];
+let targetLane = 1, laneSmooth = 1.0;
+let isJumping = false, jumpOffset = 0, jumpVy = 0, lastJumpTime = 0;
+let gameActive = false, hitOccurred = false;
+let distance = 0, gameTimer = 0, scrollOffset = 0;
+let lastObstacleFrame = 0;
+let animFrame = null;
+let pose = null, mpCamera = null;
+
+const video  = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+
+// ════════════════════════════════════════════════════
+//  POSE CALLBACK
+// ════════════════════════════════════════════════════
+function onPoseResults(results) {
+  if (!gameActive || hitOccurred) return;
+  if (!results.poseLandmarks) { poseKeypoints = []; return; }
+  const W = canvas.width, H = canvas.height;
+  poseKeypoints = results.poseLandmarks.map(lm => ({
+    x:  (1 - lm.x) * W,
+    y:  lm.y * H,
+    xn: 1 - lm.x,
+    yn: lm.y,
+    v:  lm.visibility || 0
+  }));
+  updatePlayerInput();
+}
+
+function updatePlayerInput() {
+  const kps = poseKeypoints;
+  if (kps.length < 29) return;
+  const lHip = kps[23], rHip = kps[24];
+  const lShoulder = kps[11], rShoulder = kps[12];
+  const lWrist = kps[15], rWrist = kps[16];
+  const nose = kps[0];
+
+  // Lane from hip center (x normalized, already mirrored)
+  if (lHip.v > 0.3 && rHip.v > 0.3) {
+    const hx = (lHip.xn + rHip.xn) / 2;
+    if      (hx < 0.37) targetLane = 0;
+    else if (hx > 0.63) targetLane = 2;
+    else                targetLane = 1;
+  }
+
+  // Jump: both wrists clearly above nose, with cooldown
+  if (!isJumping && lWrist.v > 0.4 && rWrist.v > 0.4 && nose.v > 0.4) {
+    if (lWrist.yn < nose.yn - 0.12 && rWrist.yn < nose.yn - 0.12) {
+      const now = Date.now();
+      if (now - lastJumpTime > 1500) {
+        lastJumpTime = now;
+        isJumping = true;
+        jumpOffset = 0;
+        jumpVy = -canvas.height * 0.018;
+      }
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  DRAW: TRACK
+// ════════════════════════════════════════════════════
+function drawTrack() {
+  const { W, H, vpX, vpY, botY, leftX, rightX, rails } = GEO;
+
+  // --- Left lava strip ---
+  const lavL = ctx.createLinearGradient(0, vpY, 0, H);
+  lavL.addColorStop(0,   'rgba(120,20,0,.4)');
+  lavL.addColorStop(0.5, 'rgba(210,55,0,.75)');
+  lavL.addColorStop(1,   'rgba(255,90,0,.95)');
+  ctx.fillStyle = lavL;
+  ctx.beginPath();
+  ctx.moveTo(0, vpY); ctx.lineTo(vpX, vpY);
+  ctx.lineTo(leftX, botY); ctx.lineTo(0, H);
+  ctx.closePath(); ctx.fill();
+
+  // --- Right lava strip ---
+  const lavR = ctx.createLinearGradient(0, vpY, 0, H);
+  lavR.addColorStop(0,   'rgba(120,20,0,.4)');
+  lavR.addColorStop(0.5, 'rgba(210,55,0,.75)');
+  lavR.addColorStop(1,   'rgba(255,90,0,.95)');
+  ctx.fillStyle = lavR;
+  ctx.beginPath();
+  ctx.moveTo(vpX, vpY); ctx.lineTo(W, vpY);
+  ctx.lineTo(W, H); ctx.lineTo(rightX, botY);
+  ctx.closePath(); ctx.fill();
+
+  // --- Horizon glow ---
+  const t = Date.now() * 0.0015;
+  const hg = ctx.createRadialGradient(vpX, vpY, 0, vpX, vpY, W * 0.45);
+  hg.addColorStop(0, `rgba(255,110,0,${0.28 + Math.sin(t)*0.07})`);
+  hg.addColorStop(1, 'transparent');
+  ctx.fillStyle = hg;
+  ctx.fillRect(0, vpY - H*0.08, W, H*0.22);
+
+  // --- Stone track trapezoid ---
+  const tg = ctx.createLinearGradient(vpX, vpY, vpX, botY);
+  tg.addColorStop(0,   '#1e1208');
+  tg.addColorStop(0.5, '#2e1a0a');
+  tg.addColorStop(1,   '#160c04');
+  ctx.fillStyle = tg;
+  ctx.beginPath();
+  ctx.moveTo(vpX, vpY);
+  ctx.lineTo(rightX, botY); ctx.lineTo(leftX, botY);
+  ctx.closePath(); ctx.fill();
+
+  // --- Scrolling floor grid ---
+  for (let i = 0; i <= 14; i++) {
+    let z = ((i / 14) + scrollOffset) % 1;
+    if (z < 0.06) continue;
+    const gy  = pY(z);
+    const glx = pX(leftX, z);
+    const grx = pX(rightX, z);
+    ctx.beginPath(); ctx.moveTo(glx, gy); ctx.lineTo(grx, gy);
+    ctx.strokeStyle = `rgba(110,75,35,${z * 0.5})`;
+    ctx.lineWidth = Math.max(0.5, z * 1.5);
+    ctx.stroke();
+  }
+
+  // --- Rail lines ---
+  for (let i = 0; i < 4; i++) {
+    const rg = ctx.createLinearGradient(vpX, vpY, rails[i], botY);
+    rg.addColorStop(0, 'rgba(150,100,50,.08)');
+    rg.addColorStop(1, 'rgba(190,140,70,.85)');
+    ctx.beginPath(); ctx.moveTo(vpX, vpY); ctx.lineTo(rails[i], botY);
+    ctx.strokeStyle = rg;
+    ctx.lineWidth = (i === 0 || i === 3) ? 3 : 1.5;
+    ctx.stroke();
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  DRAW: AVATAR (skeleton reflecting live pose)
+// ════════════════════════════════════════════════════
+const AVATAR_IDX   = [0,11,12,13,14,15,16,23,24,25,26,27,28];
+const AVATAR_EDGES = [[11,12],[0,11],[0,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+
+function drawAvatar() {
+  const kps = poseKeypoints;
+  if (!kps.length) return;
+
+  const valid = AVATAR_IDX.filter(i => i < kps.length && kps[i].v > 0.25);
+  if (valid.length < 5) return;
+
+  // Bounding box in normalized space
+  const xns = valid.map(i => kps[i].xn), yns = valid.map(i => kps[i].yn);
+  const minXn = Math.min(...xns), maxXn = Math.max(...xns);
+  const minYn = Math.min(...yns), maxYn = Math.max(...yns);
+  const bboxH = Math.max(0.15, maxYn - minYn);
+
+  const avatarH    = GEO.H * 0.30;
+  const scale      = Math.min(avatarH / bboxH, GEO.W * 0.008);
+  const avatarBotY = GEO.botY + jumpOffset;
+  const centerX    = laneCX(laneSmooth);
+  const centerXn   = (minXn + maxXn) / 2;
+
+  const mx = xn => centerX + (xn - centerXn) * scale;
+  const my = yn => avatarBotY - (maxYn - yn) * scale;
+
+  // Shadow
+  const shadowW = GEO.tw / 3 * 0.42;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0.05, 0.28 + jumpOffset * 0.001);
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.ellipse(centerX, GEO.botY + 10, shadowW, shadowW * 0.22, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Skeleton edges
+  ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  AVATAR_EDGES.forEach(([a,b]) => {
+    if (!valid.includes(a) || !valid.includes(b)) return;
+    const ax = mx(kps[a].xn), ay = my(kps[a].yn);
+    const bx = mx(kps[b].xn), by = my(kps[b].yn);
+    // Glow
+    ctx.strokeStyle = 'rgba(56,189,248,.35)'; ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+    // Core
+    ctx.strokeStyle = '#d0f4ff'; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+  });
+
+  // Joints
+  AVATAR_IDX.forEach(i => {
+    if (!valid.includes(i)) return;
+    const jx = mx(kps[i].xn), jy = my(kps[i].yn);
+    const isHead = i === 0;
+    ctx.shadowColor = isHead ? '#e879f9' : '#38bdf8';
+    ctx.shadowBlur  = isHead ? 16 : 10;
+    ctx.fillStyle   = isHead ? '#e879f9' : '#38bdf8';
+    ctx.beginPath(); ctx.arc(jx, jy, isHead ? 9 : 5, 0, Math.PI*2); ctx.fill();
+  });
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// ════════════════════════════════════════════════════
+//  SPEED & SPAWN
+// ════════════════════════════════════════════════════
+function getSpeed()         { return Math.min(0.018, 0.006 + Math.floor(distance/100) * 0.0018); }
+function getSpeedLabel()    { return `Speed ${Math.min(Math.floor(distance/100)+1, 6)}`; }
+function getSpawnInterval() { return Math.max(50, 110 - Math.floor(distance/100) * 12); }
+
+// ════════════════════════════════════════════════════
+//  HIT
+// ════════════════════════════════════════════════════
+function handleHit() {
+  if (hitOccurred) return;
+  hitOccurred = true; gameActive = false;
+
+  const bx = laneCX(laneSmooth), by = GEO.botY;
+  for (let i = 0; i < 50; i++) blastParticles.push(new BlastParticle(bx, by));
+
+  const flash = document.getElementById('hitFlash');
+  flash.classList.remove('flash');
+  requestAnimationFrame(() => flash.classList.add('flash'));
+  flash.addEventListener('animationend', () => flash.classList.remove('flash'), {once:true});
+
+  const yo = document.getElementById('youreOut');
+  yo.classList.add('show');
+  setTimeout(() => yo.classList.remove('show'), 2000);
+
+  setTimeout(() => { cancelAnimationFrame(animFrame); showGameOver(); }, 2200);
+}
+
+function showGameOver() {
+  const msgs   = ['🔥 Caught by fire!','⭐ Nice try!','🎉 Good moves!','🏆 Amazing runner!','👑 Unstoppable!'];
+  const emojis = ['🔥','⭐','🎉','🏆','👑'];
+  const mi = distance < 50 ? 0 : distance < 150 ? 1 : distance < 300 ? 2 : distance < 500 ? 3 : 4;
+  document.getElementById('finalScore').textContent = distance;
+  document.getElementById('finalMsg').textContent   = msgs[mi];
+  document.getElementById('goEmoji').textContent    = emojis[mi];
+  document.getElementById('gameover').classList.add('show');
+}
+
+// ════════════════════════════════════════════════════
+//  MAIN LOOP
+// ════════════════════════════════════════════════════
+function gameLoop() {
+  animFrame = requestAnimationFrame(gameLoop);
+  gameTimer++;
+  const spd = getSpeed();
+  scrollOffset = (scrollOffset + spd * 0.55) % 1;
+
+  // Clear
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(0, 0, GEO.W, GEO.H);
+
+  drawTrack();
+
+  // Lava particles
+  lavaParticles.forEach(p => { p.update(); p.draw(ctx); });
+
+  if (gameActive) {
+    // Smooth lane
+    laneSmooth += (targetLane - laneSmooth) * 0.14;
+
+    // Jump physics
+    if (isJumping) {
+      jumpOffset += jumpVy;
+      jumpVy += GEO.H * 0.0008;
+      if (jumpOffset >= 0) { jumpOffset = 0; jumpVy = 0; isJumping = false; }
+    }
+
+    // Distance counter (every 3 frames)
+    if (gameTimer % 3 === 0) {
+      distance++;
+      document.getElementById('distVal').textContent = distance;
+      document.getElementById('speedBadge').textContent = getSpeedLabel();
+    }
+
+    // Spawn obstacles
+    if (gameTimer - lastObstacleFrame > getSpawnInterval()) {
+      obstacles.push(new Obstacle());
+      lastObstacleFrame = gameTimer;
+    }
+
+    // Update & collision check
+    obstacles = obstacles.filter(obs => {
+      const alive = obs.update(spd);
+      if (!obs.checked && obs.z > 0.86) {
+        obs.checked = true;
+        const playerLane = Math.round(laneSmooth);
+        if (obs.getCollisionLanes().includes(playerLane) && !isJumping) handleHit();
+      }
+      return alive;
+    });
+  }
+
+  // Draw obstacles
+  obstacles.forEach(o => o.draw(ctx));
+
+  // Blast particles
+  blastParticles.forEach(p => { p.update(); p.draw(ctx); });
+  blastParticles = blastParticles.filter(p => p.alpha > 0);
+
+  // Avatar
+  drawAvatar();
+
+  // Lane indicator dots
+  if (!hitOccurred) {
+    for (let i = 0; i < 3; i++) {
+      const inLane = Math.abs(laneSmooth - i) < 0.55;
+      ctx.beginPath(); ctx.arc(GEO.laneC[i], GEO.botY + 24, inLane ? 7 : 4, 0, Math.PI*2);
+      ctx.fillStyle = inLane ? '#FFD93D' : 'rgba(255,255,255,.22)'; ctx.fill();
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  COUNTDOWN
+// ════════════════════════════════════════════════════
+function showCountdown() {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('countdown');
+    const num = document.getElementById('countNum');
+    overlay.classList.add('show');
+    let count = 3;
+    num.textContent = count;
+    const tick = () => {
+      count--;
+      if (count <= 0) {
+        num.textContent = 'GO! 🏃';
+        setTimeout(() => { overlay.classList.remove('show'); resolve(); }, 700);
+      } else {
+        num.textContent = count;
+        num.style.animation = 'none';
+        requestAnimationFrame(() => requestAnimationFrame(() =>
+          num.style.animation = 'countPop .5s cubic-bezier(.34,1.56,.64,1)'
+        ));
+        setTimeout(tick, 1000);
+      }
+    };
+    num.style.animation = 'none';
+    requestAnimationFrame(() => requestAnimationFrame(() =>
+      num.style.animation = 'countPop .5s cubic-bezier(.34,1.56,.64,1)'
+    ));
+    setTimeout(tick, 1000);
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  GAME FLOW
+// ════════════════════════════════════════════════════
+async function setupCamera() {
+  const msg = document.getElementById('loadingMsg');
+  try {
+    msg.textContent = 'Starting your webcam...';
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {width:1280, height:720, facingMode:'user'}, audio:false
+    });
+    video.srcObject = stream;
+    await new Promise(r => { video.onloadedmetadata = r; });
+    await video.play();
+
+    msg.textContent = 'Loading body tracking AI... 🤖';
+    pose = new Pose({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
+    pose.setOptions({ modelComplexity:0, smoothLandmarks:true, enableSegmentation:false, minDetectionConfidence:.5, minTrackingConfidence:.5 });
+    pose.onResults(onPoseResults);
+    mpCamera = new Camera(video, {
+      onFrame: async () => { if (pose) await pose.send({ image: video }); },
+      width: 1280, height: 720
+    });
+    await mpCamera.start();
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    msg.textContent = 'Almost ready... 🏃';
+    await new Promise(r => setTimeout(r, 1800));
+    document.getElementById('loading').style.display = 'none';
+    await showCountdown();
+    beginPlay();
+  } catch(err) {
+    console.error(err);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('permError').classList.add('show');
+  }
+}
+
+function resizeCanvas() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  computeGeo();
+  initLavaParticles();
+}
+
+function initLavaParticles() {
+  lavaParticles = [];
+  for (let i = 0; i < 60; i++) lavaParticles.push(new LavaParticle(i < 30 ? 'L' : 'R'));
+}
+
+function beginPlay() {
+  distance = 0; gameTimer = 0; scrollOffset = 0;
+  obstacles = []; blastParticles = []; poseKeypoints = [];
+  targetLane = 1; laneSmooth = 1;
+  isJumping = false; jumpOffset = 0; jumpVy = 0;
+  hitOccurred = false; lastObstacleFrame = 0;
+  document.getElementById('distVal').textContent = '0';
+  document.getElementById('speedBadge').textContent = 'Speed 1';
+  document.getElementById('gameover').classList.remove('show');
+  gameActive = true;
+  gameLoop();
+}
+
+function restartGame() {
+  document.getElementById('gameover').classList.remove('show');
+  cancelAnimationFrame(animFrame);
+  beginPlay();
+}
+
+function goHome() {
+  cancelAnimationFrame(animFrame);
+  window.location.href = 'index.html';
+}
+
+function retryCamera() {
+  document.getElementById('permError').classList.remove('show');
+  document.getElementById('loading').style.display = 'flex';
+  setupCamera();
+}
+
+window.addEventListener('load', () => { setupCamera(); });
+</script>
+</body>
+</html>
