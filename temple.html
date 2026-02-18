@@ -476,68 +476,112 @@ function drawTrack() {
 }
 
 // ════════════════════════════════════════════════════
-//  DRAW: AVATAR (skeleton reflecting live pose)
+//  DRAW: AVATAR — torso-anchored stick figure
 // ════════════════════════════════════════════════════
-const AVATAR_IDX   = [0,11,12,13,14,15,16,23,24,25,26,27,28];
-const AVATAR_EDGES = [[11,12],[0,11],[0,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
-
 function drawAvatar() {
   const kps = poseKeypoints;
-  if (!kps.length) return;
+  if (kps.length < 29) return;
 
-  const valid = AVATAR_IDX.filter(i => i < kps.length && kps[i].v > 0.25);
-  if (valid.length < 5) return;
+  const lSh = kps[11], rSh = kps[12], lHip = kps[23], rHip = kps[24], nose = kps[0];
+  // Need at least both shoulders to draw anything meaningful
+  if (lSh.v < 0.1 || rSh.v < 0.1) return;
 
-  // Bounding box in normalized space
-  const xns = valid.map(i => kps[i].xn), yns = valid.map(i => kps[i].yn);
-  const minXn = Math.min(...xns), maxXn = Math.max(...xns);
-  const minYn = Math.min(...yns), maxYn = Math.max(...yns);
-  const bboxH = Math.max(0.15, maxYn - minYn);
+  // ── Torso-based scale ──────────────────────────────
+  // Shoulder midpoint
+  const sMidXn = (lSh.xn + rSh.xn) / 2;
+  const sMidYn = (lSh.yn + rSh.yn) / 2;
+  // Hip midpoint (fallback if hips not visible)
+  const hipsOk = lHip.v > 0.1 && rHip.v > 0.1;
+  const hMidXn = hipsOk ? (lHip.xn + rHip.xn) / 2 : sMidXn;
+  const hMidYn = hipsOk ? (lHip.yn + rHip.yn) / 2 : sMidYn + 0.18;
+  const torsoDist = Math.max(0.06, hMidYn - sMidYn);
+  // Target: torso = 14% of screen height
+  const scale = (GEO.H * 0.14) / torsoDist;
 
-  const avatarH    = GEO.H * 0.30;
-  const scale      = avatarH / bboxH;
-  const avatarBotY = GEO.botY + jumpOffset;
-  const centerX    = laneCX(laneSmooth);
-  const centerXn   = (minXn + maxXn) / 2;
+  // ── Anchor: hips sit 12% above track bottom ────────
+  const anchorX = laneCX(laneSmooth);
+  const anchorY = GEO.botY - GEO.H * 0.12 + jumpOffset;
+  const mx = xn => anchorX + (xn - hMidXn) * scale;
+  const my = yn => anchorY + (yn - hMidYn) * scale;
 
-  const mx = xn => centerX + (xn - centerXn) * scale;
-  const my = yn => avatarBotY - (maxYn - yn) * scale;
-
-  // Shadow
-  const shadowW = GEO.tw / 3 * 0.42;
+  // ── Shadow ─────────────────────────────────────────
   ctx.save();
-  ctx.globalAlpha = Math.max(0.05, 0.28 + jumpOffset * 0.001);
-  ctx.fillStyle = '#000';
-  ctx.beginPath(); ctx.ellipse(centerX, GEO.botY + 10, shadowW, shadowW * 0.22, 0, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = Math.max(0.05, 0.32 - Math.abs(jumpOffset) * 0.003);
+  ctx.fillStyle = 'rgba(0,0,0,.5)';
+  const sw = Math.min(GEO.tw / 3 * 0.38, 75);
+  ctx.beginPath(); ctx.ellipse(anchorX, GEO.botY + 12, sw, sw * 0.2, 0, 0, Math.PI*2); ctx.fill();
   ctx.restore();
 
-  // Skeleton edges
-  ctx.save();
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  AVATAR_EDGES.forEach(([a,b]) => {
-    if (!valid.includes(a) || !valid.includes(b)) return;
+  // ── Draw helpers ───────────────────────────────────
+  function bone(a, b, color, glow, lw) {
+    if (kps[a].v < 0.1 || kps[b].v < 0.1) return;
     const ax = mx(kps[a].xn), ay = my(kps[a].yn);
     const bx = mx(kps[b].xn), by = my(kps[b].yn);
-    // Glow
-    ctx.strokeStyle = 'rgba(56,189,248,.35)'; ctx.lineWidth = 10;
-    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
-    // Core
-    ctx.strokeStyle = '#d0f4ff'; ctx.lineWidth = 3.5;
-    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
-  });
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.strokeStyle = glow;  ctx.lineWidth = lw + 9; ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+    ctx.strokeStyle = color; ctx.lineWidth = lw;     ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+    ctx.restore();
+  }
+  function dot(i, color, glow, r) {
+    if (kps[i].v < 0.1) return;
+    ctx.save();
+    ctx.shadowColor = glow; ctx.shadowBlur = r * 2.5;
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(mx(kps[i].xn), my(kps[i].yn), r, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.restore();
+  }
 
-  // Joints
-  AVATAR_IDX.forEach(i => {
-    if (!valid.includes(i)) return;
-    const jx = mx(kps[i].xn), jy = my(kps[i].yn);
-    const isHead = i === 0;
-    ctx.shadowColor = isHead ? '#e879f9' : '#38bdf8';
-    ctx.shadowBlur  = isHead ? 16 : 10;
-    ctx.fillStyle   = isHead ? '#e879f9' : '#38bdf8';
-    ctx.beginPath(); ctx.arc(jx, jy, isHead ? 9 : 5, 0, Math.PI*2); ctx.fill();
-  });
-  ctx.shadowBlur = 0;
-  ctx.restore();
+  // ── Torso — yellow ─────────────────────────────────
+  bone(11, 12, '#FFD93D', 'rgba(255,217,61,.45)', 7); // shoulders
+  bone(23, 24, '#FFD93D', 'rgba(255,217,61,.45)', 7); // hips
+  bone(11, 23, '#FFD93D', 'rgba(255,217,61,.45)', 7); // left side
+  bone(12, 24, '#FFD93D', 'rgba(255,217,61,.45)', 7); // right side
+
+  // ── Arms — cyan ────────────────────────────────────
+  bone(11, 13, '#38bdf8', 'rgba(56,189,248,.4)', 5);  // L upper arm
+  bone(13, 15, '#38bdf8', 'rgba(56,189,248,.4)', 5);  // L forearm
+  bone(12, 14, '#38bdf8', 'rgba(56,189,248,.4)', 5);  // R upper arm
+  bone(14, 16, '#38bdf8', 'rgba(56,189,248,.4)', 5);  // R forearm
+
+  // ── Legs — magenta ─────────────────────────────────
+  bone(23, 25, '#e879f9', 'rgba(232,121,249,.4)', 6); // L thigh
+  bone(25, 27, '#e879f9', 'rgba(232,121,249,.4)', 6); // L shin
+  bone(24, 26, '#e879f9', 'rgba(232,121,249,.4)', 6); // R thigh
+  bone(26, 28, '#e879f9', 'rgba(232,121,249,.4)', 6); // R shin
+
+  // ── Neck + head circle ─────────────────────────────
+  if (nose.v > 0.1) {
+    // Neck: shoulder midpoint → nose
+    const neckX = anchorX + (sMidXn - hMidXn) * scale;
+    const neckY = anchorY + (sMidYn - hMidYn) * scale;
+    const headX = mx(nose.xn), headY = my(nose.yn);
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(255,217,61,.45)'; ctx.lineWidth = 16;
+    ctx.beginPath(); ctx.moveTo(neckX, neckY); ctx.lineTo(headX, headY); ctx.stroke();
+    ctx.strokeStyle = '#FFD93D'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(neckX, neckY); ctx.lineTo(headX, headY); ctx.stroke();
+    ctx.restore();
+    // Head
+    const headR = Math.max(12, scale * 0.10);
+    ctx.save();
+    ctx.shadowColor = '#e879f9'; ctx.shadowBlur = 22;
+    ctx.fillStyle = '#e879f9';
+    ctx.beginPath(); ctx.arc(headX, headY, headR, 0, Math.PI*2); ctx.fill();
+    // Face shine
+    ctx.fillStyle = 'rgba(255,255,255,.35)';
+    ctx.beginPath(); ctx.arc(headX - headR*.28, headY - headR*.28, headR*.38, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.restore();
+  }
+
+  // ── Key joint dots ─────────────────────────────────
+  dot(15, '#38bdf8', '#38bdf8', 7);   // L hand
+  dot(16, '#38bdf8', '#38bdf8', 7);   // R hand
+  dot(27, '#e879f9', '#e879f9', 6);   // L foot
+  dot(28, '#e879f9', '#e879f9', 6);   // R foot
+  dot(11, '#FFD93D', '#FFD93D', 6);   // L shoulder
+  dot(12, '#FFD93D', '#FFD93D', 6);   // R shoulder
+  dot(23, '#FFD93D', '#FFD93D', 6);   // L hip
+  dot(24, '#FFD93D', '#FFD93D', 6);   // R hip
 }
 
 // ════════════════════════════════════════════════════
